@@ -4,7 +4,9 @@ import morgan from 'morgan';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
 import mongoose from 'mongoose';
+import { clerkMiddleware } from '@clerk/express';
 import connectDB from './config/db.js';
+import userRoutes from './routes/userRoutes.js';
 
 // Load environment variables from .env file
 dotenv.config();
@@ -17,6 +19,9 @@ app.use(helmet()); // Set secure HTTP headers
 app.use(cors()); // Enable Cross-Origin Resource Sharing
 app.use(express.json()); // Parse incoming JSON payloads
 app.use(express.urlencoded({ extended: true })); // Parse URL-encoded payloads
+
+// Clerk Auth Middleware (attaches req.auth for authentication checking)
+app.use(clerkMiddleware());
 
 // Logging configuration based on environment
 if (process.env.NODE_ENV === 'development') {
@@ -59,6 +64,9 @@ app.get('/api/health', (req, res) => {
     },
   });
 });
+
+// Register API routes
+app.use('/api/user', userRoutes);
 
 // Fallback for 404 - Not Found
 app.use((req, res, next) => {
