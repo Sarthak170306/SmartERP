@@ -1,8 +1,8 @@
 'use client';
 
-import { useAuth, useUser, UserButton } from "@clerk/nextjs";
+import { useAuth, useUser, UserButton, useClerk } from "@clerk/nextjs";
 import { useEffect, useState, useRef } from "react";
-import { Layers, Database, UserCheck, RefreshCw, AlertCircle, Building2, Plus, ArrowRight, MapPin, FileSpreadsheet, Phone, Mail, LogOut, ArrowLeftRight, ChevronDown, Search, Check } from "lucide-react";
+import { Layers, Database, UserCheck, RefreshCw, AlertCircle, Building2, Plus, ArrowRight, MapPin, FileSpreadsheet, Phone, Mail, LogOut, ArrowLeftRight, ChevronDown, Search, Check, Zap } from "lucide-react";
 import Link from "next/link";
 
 const INDIAN_STATES = [
@@ -181,6 +181,9 @@ interface CompanyProfile {
 export default function DashboardPage() {
   const { isLoaded, userId, getToken } = useAuth();
   const { user } = useUser();
+  const { signOut } = useClerk();
+
+  // State hooks
   const [syncStatus, setSyncStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [dbUser, setDbUser] = useState<DbUser | null>(null);
   const [errorDetails, setErrorDetails] = useState<string>('');
@@ -189,7 +192,7 @@ export default function DashboardPage() {
   const [companies, setCompanies] = useState<CompanyProfile[]>([]);
   const [companiesLoading, setCompaniesLoading] = useState<boolean>(true);
   const [activeCompanyId, setActiveCompanyId] = useState<string | null>(null);
-  
+
   // Create Company Form Modal State
   const [showCreateModal, setShowCreateModal] = useState<boolean>(false);
   const [newCompanyName, setNewCompanyName] = useState<string>('');
@@ -201,8 +204,56 @@ export default function DashboardPage() {
   const [newEmail, setNewEmail] = useState<string>('');
   const [formSubmitting, setFormSubmitting] = useState<boolean>(false);
   const [formError, setFormError] = useState<string>('');
+  
+  // Day 4 Gateway Menu States
+  const [menuIndex, setMenuIndex] = useState<number>(0);
+  const [actionNotification, setActionNotification] = useState<string | null>(null);
 
-  // 1. Sync Clerk user profile with local DB
+  // useEffect Hook 1: Global Keydown Listener for Tally-inspired Keyboard navigation
+  useEffect(() => {
+    if (!activeCompanyId) return;
+
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      // Ignore key shortcuts if modal is open or user is typing inside an input/textarea
+      if (
+        showCreateModal || 
+        document.activeElement?.tagName === "INPUT" || 
+        document.activeElement?.tagName === "TEXTAREA"
+      ) {
+        return;
+      }
+
+      const key = e.key.toUpperCase();
+
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setMenuIndex(prev => (prev < menuItems.length - 1 ? prev + 1 : 0));
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setMenuIndex(prev => (prev > 0 ? prev - 1 : menuItems.length - 1));
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        menuItems[menuIndex].action();
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        handleSwitchCompany();
+      } else {
+        // Match alphabetical hotkeys
+        const matchedItem = menuItems.find(item => item.hotkey === key);
+        if (matchedItem) {
+          e.preventDefault();
+          const idx = menuItems.findIndex(item => item.hotkey === key);
+          setMenuIndex(idx);
+          matchedItem.action();
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleGlobalKeyDown);
+    return () => window.removeEventListener("keydown", handleGlobalKeyDown);
+  }, [activeCompanyId, menuIndex, showCreateModal, companies, dbUser]);
+
+  // useEffect Hook 2: Sync Clerk user profile with local DB
   useEffect(() => {
     async function syncUser() {
       if (!userId) return;
@@ -246,8 +297,82 @@ export default function DashboardPage() {
     }
   }, [isLoaded, userId, getToken]);
 
-  // 2. Fetch Companies once user sync is successful
-  const fetchCompanies = async () => {
+  // useEffect Hook 3: Fetch Companies once user sync is successful
+  useEffect(() => {
+    if (syncStatus === 'success') {
+      fetchCompanies();
+    }
+  }, [syncStatus]);
+
+  // custom handlers & helper functions defined after all hook calls
+  function handleMenuAction(message: string) {
+    setActionNotification(message);
+    const timeout = setTimeout(() => {
+      setActionNotification(null);
+    }, 3000);
+    return () => clearTimeout(timeout);
+  }
+
+  const menuItems = [
+    { 
+      label: "Accounts Info / Ledgers", 
+      displayLabel: () => <span>Accounts Info &gt; <span className="text-red-500 font-extrabold">L</span>edgers</span>, 
+      hotkey: "L", 
+      section: "MASTERS", 
+      action: () => handleMenuAction("Masters: Ledgers Configuration module activated") 
+    },
+    { 
+      label: "Groups Configuration", 
+      displayLabel: () => <span>Accounts Info &gt; <span className="text-red-500 font-extrabold">G</span>roups</span>, 
+      hotkey: "G", 
+      section: "MASTERS", 
+      action: () => handleMenuAction("Masters: Account Groups Configuration module activated") 
+    },
+    { 
+      label: "Accounting Vouchers", 
+      displayLabel: () => <span>Accounting <span className="text-red-500 font-extrabold">V</span>ouchers</span>, 
+      hotkey: "V", 
+      section: "TRANSACTIONS", 
+      action: () => handleMenuAction("Transactions: Accounting Vouchers entry activated") 
+    },
+    { 
+      label: "Balance Sheet", 
+      displayLabel: () => <span><span className="text-red-500 font-extrabold">B</span>alance Sheet</span>, 
+      hotkey: "B", 
+      section: "REPORTS", 
+      action: () => handleMenuAction("Reports: Balance Sheet report generated") 
+    },
+    { 
+      label: "Profit & Loss A/c", 
+      displayLabel: () => <span><span className="text-red-500 font-extrabold">P</span>rofit & Loss A/c</span>, 
+      hotkey: "P", 
+      section: "REPORTS", 
+      action: () => handleMenuAction("Reports: Profit & Loss A/c report generated") 
+    },
+    { 
+      label: "Trial Balance", 
+      displayLabel: () => <span><span className="text-red-500 font-extrabold">T</span>ariff / Trial Balance</span>, 
+      hotkey: "T", 
+      section: "REPORTS", 
+      action: () => handleMenuAction("Reports: Trial Balance report generated") 
+    },
+    { 
+      label: "Switch Company", 
+      displayLabel: () => <span><span className="text-red-500 font-extrabold">S</span>witch Company</span>, 
+      hotkey: "S", 
+      section: "UTILITIES", 
+      action: () => handleSwitchCompany() 
+    },
+    { 
+      label: "Quit / Logout", 
+      displayLabel: () => <span><span className="text-red-500 font-extrabold">Q</span>uit (Logout)</span>, 
+      hotkey: "Q", 
+      section: "UTILITIES", 
+      action: () => signOut().then(() => window.location.href = "/") 
+    }
+  ];
+
+  async function fetchCompanies() {
     if (!userId) return;
     setCompaniesLoading(true);
     try {
@@ -268,16 +393,9 @@ export default function DashboardPage() {
     } finally {
       setCompaniesLoading(false);
     }
-  };
+  }
 
-  useEffect(() => {
-    if (syncStatus === 'success') {
-      fetchCompanies();
-    }
-  }, [syncStatus]);
-
-  // 3. Handle Select / Enter Company
-  const handleEnterCompany = async (companyId: string) => {
+  async function handleEnterCompany(companyId: string) {
     try {
       const token = await getToken();
       const res = await fetch("http://localhost:5000/api/user/active-company", {
@@ -292,7 +410,6 @@ export default function DashboardPage() {
       const data = await res.json();
       if (res.ok && data.success) {
         setActiveCompanyId(data.activeCompanyId);
-        // Sync dbUser state
         if (dbUser) {
           setDbUser({ ...dbUser, activeCompanyId: data.activeCompanyId });
         }
@@ -302,10 +419,9 @@ export default function DashboardPage() {
     } catch (err) {
       console.error("Error selecting company:", err);
     }
-  };
+  }
 
-  // 4. Handle Switch / Clear Company Context
-  const handleSwitchCompany = async () => {
+  async function handleSwitchCompany() {
     try {
       const token = await getToken();
       const res = await fetch("http://localhost:5000/api/user/active-company", {
@@ -329,10 +445,9 @@ export default function DashboardPage() {
     } catch (err) {
       console.error("Error clearing company context:", err);
     }
-  };
+  }
 
-  // 5. Handle Create Company Form Submission
-  const handleCreateCompany = async (e: React.FormEvent) => {
+  async function handleCreateCompany(e: React.FormEvent) {
     e.preventDefault();
     setFormSubmitting(true);
     setFormError('');
@@ -360,16 +475,13 @@ export default function DashboardPage() {
 
       const data = await res.json();
       if (res.ok && data.success) {
-        // Refresh companies list
         await fetchCompanies();
-        // If the backend auto-selected this company
         if (data.activeCompanyId) {
           setActiveCompanyId(data.activeCompanyId);
           if (dbUser) {
             setDbUser({ ...dbUser, activeCompanyId: data.activeCompanyId });
           }
         }
-        // Reset Form Fields
         setNewCompanyName('');
         setNewAddress('');
         setNewGst('');
@@ -386,7 +498,7 @@ export default function DashboardPage() {
     } finally {
       setFormSubmitting(false);
     }
-  };
+  }
 
   const activeCompany = companies.find(c => c._id === activeCompanyId);
 
@@ -455,70 +567,104 @@ export default function DashboardPage() {
         {/* VIEW 1: ACTIVE COMPANY WORKSPACE VIEW */}
         {activeCompanyId && activeCompany ? (
           <div className="space-y-8 animate-fade-in">
-            {/* Header banner */}
-            <div className="p-8 rounded-3xl border border-zinc-900 bg-gradient-to-r from-zinc-950 via-zinc-900/50 to-zinc-950 backdrop-blur-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-              <div>
-                <span className="text-xs text-emerald-400 font-bold uppercase tracking-widest block mb-1">Company Context Active</span>
-                <h1 className="text-4xl font-extrabold tracking-tight">{activeCompany.companyName}</h1>
-                <p className="text-zinc-400 text-sm mt-1">Financial Year: {activeCompany.financialYear} • State: {activeCompany.state}</p>
-              </div>
-              <button 
-                onClick={handleSwitchCompany}
-                className="px-5 py-3 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded-xl text-sm font-semibold transition-all flex items-center gap-2 transform hover:-translate-y-0.5"
-              >
-                <ArrowLeftRight className="h-4 w-4 text-emerald-400" /> Switch Business Profile
-              </button>
-            </div>
-
-            {/* Sub-workspace Placeholder */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {/* Profile details card */}
-              <div className="p-6 rounded-2xl border border-zinc-900 bg-zinc-950/40 backdrop-blur-sm col-span-1">
-                <h2 className="text-lg font-bold border-b border-zinc-900 pb-3 mb-4">Tenancy Specifications</h2>
-                <div className="space-y-4 text-sm">
-                  {activeCompany.gstNumber && (
-                    <div>
-                      <span className="text-xs text-zinc-500 block">GSTIN NUMBER</span>
-                      <span className="font-mono text-zinc-350">{activeCompany.gstNumber}</span>
-                    </div>
-                  )}
-                  <div>
-                    <span className="text-xs text-zinc-500 block">TAXATION JURISDICTION (STATE)</span>
-                    <span className="text-zinc-350">{activeCompany.state}</span>
+            {/* Split Screen Container */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 bg-zinc-950 p-8 rounded-3xl border border-zinc-900 shadow-2xl relative">
+              
+              {/* Left Panel: Company Status (5 cols) */}
+              <div className="lg:col-span-5 border-b lg:border-b-0 lg:border-r border-zinc-900 pb-8 lg:pb-0 lg:pr-8 flex flex-col justify-between min-h-[350px]">
+                <div className="space-y-6">
+                  <div className="border-b border-zinc-900 pb-4">
+                    <span className="text-[10px] text-emerald-400 font-extrabold uppercase tracking-widest block mb-1">Current Company Context</span>
+                    <h2 className="text-3xl font-black text-zinc-100 tracking-tight leading-tight">{activeCompany.companyName}</h2>
                   </div>
-                  {activeCompany.address && (
+
+                  <div className="grid grid-cols-2 gap-5 text-sm">
                     <div>
-                      <span className="text-xs text-zinc-500 block">OFFICIAL ADDRESS</span>
-                      <span className="text-zinc-350 leading-relaxed block mt-0.5">{activeCompany.address}</span>
+                      <span className="text-[10px] text-zinc-500 block uppercase font-bold tracking-wider">Financial period</span>
+                      <span className="text-zinc-300 font-mono block mt-0.5">01-Apr-2026 to 31-Mar-2027</span>
                     </div>
-                  )}
-                  {activeCompany.contactInfo && (activeCompany.contactInfo.phone || activeCompany.contactInfo.email) && (
                     <div>
-                      <span className="text-xs text-zinc-500 block">CONTACT DETAILS</span>
-                      <div className="mt-1 space-y-1">
-                        {activeCompany.contactInfo.phone && (
-                          <span className="flex items-center gap-1.5 text-zinc-400"><Phone className="h-3.5 w-3.5" /> {activeCompany.contactInfo.phone}</span>
-                        )}
-                        {activeCompany.contactInfo.email && (
-                          <span className="flex items-center gap-1.5 text-zinc-400"><Mail className="h-3.5 w-3.5" /> {activeCompany.contactInfo.email}</span>
-                        )}
+                      <span className="text-[10px] text-zinc-500 block uppercase font-bold tracking-wider">State Jurisdiction</span>
+                      <span className="text-zinc-300 font-semibold block mt-0.5">{activeCompany.state}</span>
+                    </div>
+                    {activeCompany.gstNumber && (
+                      <div className="col-span-2">
+                        <span className="text-[10px] text-zinc-500 block uppercase font-bold tracking-wider">GSTIN identifier</span>
+                        <span className="text-zinc-300 font-mono block mt-0.5">{activeCompany.gstNumber}</span>
                       </div>
+                    )}
+                    <div className="col-span-2">
+                      <span className="text-[10px] text-zinc-500 block uppercase font-bold tracking-wider">Current system Date</span>
+                      <span className="text-emerald-400 font-bold font-mono block mt-0.5">
+                        {new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}
+                      </span>
                     </div>
-                  )}
+                  </div>
+                </div>
+
+                {/* Keyboard Quick Navigation Guide */}
+                <div className="p-4 rounded-xl bg-zinc-900/40 border border-zinc-900 text-xs text-zinc-500 space-y-2 mt-6">
+                  <p className="font-bold text-zinc-400 flex items-center gap-1.5 uppercase tracking-wider text-[10px]">
+                    <Zap className="h-3.5 w-3.5 text-emerald-400 animate-pulse" /> Keyboard Navigation Active:
+                  </p>
+                  <ul className="list-disc list-inside space-y-1 pl-1 text-[11px] leading-relaxed">
+                    <li>Use <kbd className="px-1.5 py-0.5 rounded bg-zinc-800 border border-zinc-700 text-zinc-300 font-mono text-[9px] shadow-sm">↑</kbd> and <kbd className="px-1.5 py-0.5 rounded bg-zinc-800 border border-zinc-700 text-zinc-300 font-mono text-[9px] shadow-sm">↓</kbd> Arrow Keys to scroll.</li>
+                    <li>Press <kbd className="px-1.5 py-0.5 rounded bg-zinc-800 border border-zinc-700 text-zinc-300 font-mono text-[9px] shadow-sm">Enter</kbd> to select menu items.</li>
+                    <li>Press colored hotkey letters (e.g. <kbd className="px-1.5 py-0.5 rounded bg-zinc-800 border border-zinc-700 text-red-500 font-bold font-mono text-[9px] shadow-sm">L</kbd>) directly.</li>
+                    <li>Press <kbd className="px-1.5 py-0.5 rounded bg-zinc-800 border border-zinc-700 text-zinc-300 font-mono text-[9px] shadow-sm">Esc</kbd> to go back to selection.</li>
+                  </ul>
                 </div>
               </div>
 
-              {/* Day 4 placeholder: accounts structure */}
-              <div className="p-8 rounded-2xl border border-zinc-900 bg-zinc-950/40 backdrop-blur-sm col-span-2 flex flex-col items-center justify-center text-center p-12 min-h-[300px]">
-                <FileSpreadsheet className="h-12 w-12 text-zinc-600 mb-4 stroke-[1.5]" />
-                <h3 className="text-xl font-bold mb-2">Accounting Modules Pending</h3>
-                <p className="text-zinc-500 text-sm max-w-sm leading-relaxed mb-6">
-                  Ledgers, account groups, and journal vouchers are strictly isolated under this company context.
-                </p>
-                <div className="inline-flex items-center gap-2 text-xs font-semibold px-3 py-1 rounded-full border border-emerald-500/20 bg-emerald-500/5 text-emerald-400 uppercase tracking-wider">
-                  Ready for Day 4 Integration
+              {/* Right Panel: Gateway Menu Box (7 cols) */}
+              <div className="lg:col-span-7 flex flex-col justify-center items-center py-4">
+                <div className="w-full max-w-md border-2 border-emerald-500/20 bg-zinc-950 rounded-2xl shadow-xl overflow-hidden flex flex-col">
+                  {/* Gateway header */}
+                  <div className="bg-gradient-to-r from-emerald-500/10 to-teal-500/10 border-b-2 border-emerald-500/20 px-6 py-4 flex items-center justify-center">
+                    <span className="text-xs font-black tracking-widest text-emerald-400 uppercase">Gateway of SmartERP</span>
+                  </div>
+
+                  {/* Menu items list */}
+                  <div className="p-3 flex flex-col divide-y divide-zinc-900/40">
+                    {["MASTERS", "TRANSACTIONS", "REPORTS", "UTILITIES"].map((section) => {
+                      const sectionItems = menuItems.filter(item => item.section === section);
+                      if (sectionItems.length === 0) return null;
+
+                      return (
+                        <div key={section} className="py-2.5 first:pt-0 last:pb-0">
+                          <span className="text-[9px] font-extrabold text-zinc-650 block mb-1.5 px-3 tracking-widest uppercase">{section}</span>
+                          <div className="space-y-0.5">
+                            {sectionItems.map((item) => {
+                              const globalIdx = menuItems.findIndex(mi => mi.label === item.label);
+                              const isHighlighted = globalIdx === menuIndex;
+
+                              return (
+                                <button
+                                  key={item.label}
+                                  type="button"
+                                  onClick={() => {
+                                    setMenuIndex(globalIdx);
+                                    item.action();
+                                  }}
+                                  className={`w-full text-left px-3.5 py-2.5 rounded-xl text-xs flex justify-between items-center transition-all focus:outline-none ${
+                                    isHighlighted 
+                                      ? "bg-emerald-500/10 text-emerald-400 font-bold border border-emerald-500/30 shadow-lg shadow-emerald-500/5 translate-x-1" 
+                                      : "text-zinc-400 hover:text-zinc-200 border border-transparent"
+                                  }`}
+                                >
+                                  {item.displayLabel()}
+                                  {isHighlighted && <ArrowRight className="h-4 w-4 text-emerald-400 animate-pulse" />}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
+
             </div>
           </div>
         ) : (
@@ -747,9 +893,17 @@ export default function DashboardPage() {
         </div>
       )}
 
+      {/* Floating Action Notification */}
+      {actionNotification && (
+        <div className="fixed bottom-6 right-6 z-50 p-4 rounded-xl border border-emerald-500/20 bg-zinc-950 shadow-2xl animate-fade-in flex items-center gap-2.5">
+          <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></div>
+          <span className="text-xs font-semibold text-emerald-400">{actionNotification}</span>
+        </div>
+      )}
+
       {/* Footer */}
-      <footer className="border-t border-zinc-900 py-8 text-center text-zinc-600 text-xs mt-auto">
-        <p>© 2026 SmartERP. Day 3 Complete: Company Context Switches.</p>
+      <footer className="border-t border-zinc-900 py-8 text-center text-zinc-650 text-xs mt-auto">
+        <p>© 2026 SmartERP. Day 4 Complete: Gateway of SmartERP Main Layout.</p>
       </footer>
     </div>
   );
