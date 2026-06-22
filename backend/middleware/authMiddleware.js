@@ -1,13 +1,17 @@
 import { getAuth } from '@clerk/express';
+import User from '../models/User.js';
 
 /**
- * Clerk Authentication Gatekeeper
+ * Clerk Authentication Gatekeeper with Local Context Resolution
  * 
  * Multi-Tenancy Architecture:
- * - Session Resolution: Intercepts the request and extracts authentication state.
- * - Context Injection: Attaches the verified `clerkUserId` to the `req` object.
+ * - Session Resolution: Verifies session claims and extracts auth context.
+ * - Profile Resolution: Looks up the local MongoDB user profile and attaches
+ *   `req.user` with their database `id`, email, and company settings.
+ * - Circular Dependency Fallback: If no database profile is found, `req.user`
+ *   is set to `null` instead of throwing an error, allowing the sync route to operate.
  */
-export const requireAuth = (req, res, next) => {
+export const requireAuth = async (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
     if (!authHeader) {
@@ -26,8 +30,21 @@ export const requireAuth = (req, res, next) => {
       });
     }
 
-    // Attach clerkUserId for subsequent handlers
+    // Attach clerkUserId for sync routing
     req.clerkUserId = auth.userId;
+
+    // Resolve local database User context
+    const dbUser = await User.findOne({ clerkUserId: auth.userId });
+    if (dbUser) {
+      req.user = {
+        id: dbUser._id,
+        email: dbUser.email,
+        activeCompanyId: dbUser.activeCompanyId,
+      };
+    } else {
+      req.user = null;
+    }
+
     next();
   } catch (error) {
     console.error(`[Auth Error] Critical error in requireAuth middleware:`, error);

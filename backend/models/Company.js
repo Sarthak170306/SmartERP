@@ -51,20 +51,14 @@ const companySchema = new mongoose.Schema(
 );
 
 // Enforce multi-tenant subscription rule: max 5 companies per user
-companySchema.pre('save', async function (next) {
-  if (this.isNew) {
-    try {
-      const CompanyModel = mongoose.model('Company');
-      const companyCount = await CompanyModel.countDocuments({ userId: this.userId });
-      
-      if (companyCount >= 5) {
-        return next(new Error('SaaS Limit Exceeded: You can create a maximum of 5 companies per user account.'));
-      }
-    } catch (error) {
-      return next(error);
+companySchema.pre('save', async function() {
+  const company = this;
+  if (company.isNew) {
+    const count = await mongoose.model('Company').countDocuments({ userId: company.userId });
+    if (count >= 5) {
+      throw new Error("SaaS Limit Reached: You can manage a maximum of 5 companies per account.");
     }
   }
-  next();
 });
 
 const Company = mongoose.model('Company', companySchema);

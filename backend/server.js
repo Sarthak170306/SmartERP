@@ -7,6 +7,7 @@ import mongoose from 'mongoose';
 import { clerkMiddleware } from '@clerk/express';
 import connectDB from './config/db.js';
 import userRoutes from './routes/userRoutes.js';
+import companyRoutes from './routes/companyRoutes.js';
 
 // Load environment variables from .env file
 dotenv.config();
@@ -67,6 +68,7 @@ app.get('/api/health', (req, res) => {
 
 // Register API routes
 app.use('/api/user', userRoutes);
+app.use('/api/companies', companyRoutes);
 
 // Fallback for 404 - Not Found
 app.use((req, res, next) => {

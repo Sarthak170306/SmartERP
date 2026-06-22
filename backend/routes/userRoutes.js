@@ -2,6 +2,7 @@ import express from 'express';
 import { requireAuth } from '../middleware/authMiddleware.js';
 import { clerkClient } from '@clerk/express';
 import User from '../models/User.js';
+import Company from '../models/Company.js';
 
 const router = express.Router();
 
@@ -146,5 +147,56 @@ const syncUserHandler = async (req, res) => {
 // Support both GET and POST sync requests
 router.get('/sync', requireAuth, syncUserHandler);
 router.post('/sync', requireAuth, syncUserHandler);
+
+/**
+ * PUT /api/user/active-company
+ * 
+ * Switches the active company context for the authenticated user session.
+ */
+router.put('/active-company', requireAuth, async (req, res) => {
+  try {
+    const { companyId } = req.body;
+
+    const user = await User.findOne({ clerkUserId: req.clerkUserId });
+    if (!user) {
+      return res.status(404).json({
+        error: 'User profile not found.',
+        code: 'USER_NOT_FOUND',
+      });
+    }
+
+    if (companyId) {
+      // Verify that the requested company exists and belongs to the logged-in user
+      const company = await Company.findOne({ _id: companyId, userId: user._id });
+      if (!company) {
+        return res.status(403).json({
+          error: 'Unauthorized: You do not own this company.',
+          code: 'COMPANY_ACCESS_DENIED',
+        });
+      }
+      
+      user.activeCompanyId = companyId;
+      console.log(`[Active Company Switch] User ${user.email} switched active context to "${company.companyName}"`);
+    } else {
+      user.activeCompanyId = null;
+      console.log(`[Active Company Switch] User ${user.email} cleared active company context`);
+    }
+
+    await user.save();
+
+    return res.status(200).json({
+      success: true,
+      message: 'Active company context updated successfully.',
+      activeCompanyId: user.activeCompanyId,
+    });
+  } catch (error) {
+    console.error('[Active Company Switch Error] Failed to update active context:', error);
+    return res.status(500).json({
+      error: 'Failed to update active company context.',
+      code: 'ACTIVE_COMPANY_SWITCH_FAILED',
+      details: error.message,
+    });
+  }
+});
 
 export default router;

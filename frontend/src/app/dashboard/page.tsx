@@ -1,15 +1,181 @@
 'use client';
 
 import { useAuth, useUser, UserButton } from "@clerk/nextjs";
-import { useEffect, useState } from "react";
-import { Layers, Database, UserCheck, RefreshCw, AlertCircle } from "lucide-react";
+import { useEffect, useState, useRef } from "react";
+import { Layers, Database, UserCheck, RefreshCw, AlertCircle, Building2, Plus, ArrowRight, MapPin, FileSpreadsheet, Phone, Mail, LogOut, ArrowLeftRight, ChevronDown, Search, Check } from "lucide-react";
 import Link from "next/link";
+
+const INDIAN_STATES = [
+  "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh", 
+  "Goa", "Gujarat", "Haryana", "Himachal Pradesh", "Jharkhand", "Karnataka", 
+  "Kerala", "Madhya Pradesh", "Maharashtra", "Manipur", "Meghalaya", "Mizoram", 
+  "Nagaland", "Odisha", "Punjab", "Rajasthan", "Sikkim", "Tamil Nadu", 
+  "Telangana", "Tripura", "Uttar Pradesh", "Uttarakhand", "West Bengal",
+  "Andaman and Nicobar Islands", "Chandigarh", "Dadra and Nagar Haveli and Daman and Diu", 
+  "Delhi", "Jammu and Kashmir", "Ladakh", "Lakshadweep", "Puducherry"
+];
+
+interface StateComboboxProps {
+  value: string;
+  onChange: (val: string) => void;
+}
+
+function StateCombobox({ value, onChange }: StateComboboxProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const [highlightedIndex, setHighlightedIndex] = useState(0);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+
+  const filteredStates = INDIAN_STATES.filter(state =>
+    state.toLowerCase().includes(search.toLowerCase())
+  );
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    setHighlightedIndex(0);
+  }, [search, isOpen]);
+
+  useEffect(() => {
+    if (isOpen && listRef.current) {
+      const activeEl = listRef.current.querySelector('[data-highlighted="true"]');
+      if (activeEl) {
+        activeEl.scrollIntoView({ block: 'nearest' });
+      }
+    }
+  }, [highlightedIndex, isOpen]);
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (!isOpen) {
+      if (e.key === "ArrowDown" || e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        setIsOpen(true);
+      }
+      return;
+    }
+
+    switch (e.key) {
+      case "ArrowDown":
+        e.preventDefault();
+        setHighlightedIndex(prev => 
+          prev < filteredStates.length - 1 ? prev + 1 : prev
+        );
+        break;
+      case "ArrowUp":
+        e.preventDefault();
+        setHighlightedIndex(prev => (prev > 0 ? prev - 1 : 0));
+        break;
+      case "Enter":
+        e.preventDefault();
+        if (filteredStates[highlightedIndex]) {
+          onChange(filteredStates[highlightedIndex]);
+          setIsOpen(false);
+          setSearch("");
+        }
+        break;
+      case "Escape":
+        e.preventDefault();
+        setIsOpen(false);
+        break;
+      case "Tab":
+        setIsOpen(false);
+        break;
+    }
+  };
+
+  return (
+    <div className="relative" ref={containerRef} onKeyDown={handleKeyDown}>
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full bg-zinc-900 border border-zinc-800 focus:border-emerald-500/50 rounded-xl px-4 py-3 text-sm text-zinc-150 text-left flex justify-between items-center focus:outline-none transition-colors"
+      >
+        <span className={value ? "text-zinc-100" : "text-zinc-500"}>
+          {value || "Select State / UT"}
+        </span>
+        <ChevronDown className="h-4 w-4 text-zinc-500" />
+      </button>
+
+      {isOpen && (
+        <div className="absolute z-50 w-full mt-2 bg-zinc-950 border border-zinc-900 rounded-2xl shadow-2xl p-2 max-h-[220px] flex flex-col">
+          <div className="relative flex items-center border-b border-zinc-900 pb-2 mb-2 px-2">
+            <Search className="absolute left-5 h-4 w-4 text-zinc-650" />
+            <input
+              type="text"
+              placeholder="Search state..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full bg-zinc-905/50 border border-zinc-900 rounded-xl pl-9 pr-4 py-2 text-xs text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-emerald-500/30"
+              autoFocus
+            />
+          </div>
+
+          <div className="overflow-y-auto flex-1 space-y-0.5" ref={listRef}>
+            {filteredStates.length === 0 ? (
+              <div className="text-zinc-600 text-xs py-3 text-center">
+                No states found
+              </div>
+            ) : (
+              filteredStates.map((state, idx) => {
+                const isSelected = value === state;
+                const isHighlighted = idx === highlightedIndex;
+
+                return (
+                  <button
+                    key={state}
+                    type="button"
+                    onClick={() => {
+                      onChange(state);
+                      setIsOpen(false);
+                      setSearch("");
+                    }}
+                    data-highlighted={isHighlighted}
+                    className={`w-full text-left px-3 py-2 rounded-lg text-xs flex justify-between items-center transition-colors ${
+                      isHighlighted 
+                        ? "bg-emerald-500/10 text-emerald-400 font-semibold" 
+                        : "text-zinc-350 hover:bg-zinc-900/60"
+                    }`}
+                  >
+                    <span>{state}</span>
+                    {isSelected && <Check className="h-3.5 w-3.5 text-emerald-400" />}
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 interface DbUser {
   id: string;
   clerkUserId: string;
   email: string;
   activeCompanyId: string | null;
+}
+
+interface CompanyProfile {
+  _id: string;
+  companyName: string;
+  address?: string;
+  gstNumber?: string;
+  financialYear: string;
+  state: string;
+  contactInfo?: {
+    phone?: string;
+    email?: string;
+  };
 }
 
 export default function DashboardPage() {
@@ -19,6 +185,24 @@ export default function DashboardPage() {
   const [dbUser, setDbUser] = useState<DbUser | null>(null);
   const [errorDetails, setErrorDetails] = useState<string>('');
 
+  // Company State
+  const [companies, setCompanies] = useState<CompanyProfile[]>([]);
+  const [companiesLoading, setCompaniesLoading] = useState<boolean>(true);
+  const [activeCompanyId, setActiveCompanyId] = useState<string | null>(null);
+  
+  // Create Company Form Modal State
+  const [showCreateModal, setShowCreateModal] = useState<boolean>(false);
+  const [newCompanyName, setNewCompanyName] = useState<string>('');
+  const [newAddress, setNewAddress] = useState<string>('');
+  const [newGst, setNewGst] = useState<string>('');
+  const [newFy, setNewFy] = useState<string>('2026-2027');
+  const [newState, setNewState] = useState<string>('');
+  const [newPhone, setNewPhone] = useState<string>('');
+  const [newEmail, setNewEmail] = useState<string>('');
+  const [formSubmitting, setFormSubmitting] = useState<boolean>(false);
+  const [formError, setFormError] = useState<string>('');
+
+  // 1. Sync Clerk user profile with local DB
   useEffect(() => {
     async function syncUser() {
       if (!userId) return;
@@ -42,6 +226,7 @@ export default function DashboardPage() {
         
         if (res.ok && data.success) {
           setDbUser(data.user);
+          setActiveCompanyId(data.user.activeCompanyId);
           setSyncStatus('success');
         } else {
           const errMsg = data.details 
@@ -61,10 +246,174 @@ export default function DashboardPage() {
     }
   }, [isLoaded, userId, getToken]);
 
-  if (!isLoaded) {
+  // 2. Fetch Companies once user sync is successful
+  const fetchCompanies = async () => {
+    if (!userId) return;
+    setCompaniesLoading(true);
+    try {
+      const token = await getToken();
+      const res = await fetch("http://localhost:5000/api/companies", {
+        headers: {
+          "Authorization": `Bearer ${token}`
+        }
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setCompanies(data.companies);
+      } else {
+        console.error("Failed to fetch companies:", data.error);
+      }
+    } catch (err) {
+      console.error("Error fetching companies:", err);
+    } finally {
+      setCompaniesLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (syncStatus === 'success') {
+      fetchCompanies();
+    }
+  }, [syncStatus]);
+
+  // 3. Handle Select / Enter Company
+  const handleEnterCompany = async (companyId: string) => {
+    try {
+      const token = await getToken();
+      const res = await fetch("http://localhost:5000/api/user/active-company", {
+        method: "PUT",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ companyId })
+      });
+      
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setActiveCompanyId(data.activeCompanyId);
+        // Sync dbUser state
+        if (dbUser) {
+          setDbUser({ ...dbUser, activeCompanyId: data.activeCompanyId });
+        }
+      } else {
+        alert(`Error selecting company: ${data.error}`);
+      }
+    } catch (err) {
+      console.error("Error selecting company:", err);
+    }
+  };
+
+  // 4. Handle Switch / Clear Company Context
+  const handleSwitchCompany = async () => {
+    try {
+      const token = await getToken();
+      const res = await fetch("http://localhost:5000/api/user/active-company", {
+        method: "PUT",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ companyId: null })
+      });
+      
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setActiveCompanyId(null);
+        if (dbUser) {
+          setDbUser({ ...dbUser, activeCompanyId: null });
+        }
+      } else {
+        alert(`Error switching company: ${data.error}`);
+      }
+    } catch (err) {
+      console.error("Error clearing company context:", err);
+    }
+  };
+
+  // 5. Handle Create Company Form Submission
+  const handleCreateCompany = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setFormSubmitting(true);
+    setFormError('');
+
+    try {
+      const token = await getToken();
+      const res = await fetch("http://localhost:5000/api/companies/create", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          companyName: newCompanyName,
+          address: newAddress,
+          gstNumber: newGst,
+          financialYear: newFy,
+          state: newState,
+          contactInfo: {
+            phone: newPhone,
+            email: newEmail
+          }
+        })
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        // Refresh companies list
+        await fetchCompanies();
+        // If the backend auto-selected this company
+        if (data.activeCompanyId) {
+          setActiveCompanyId(data.activeCompanyId);
+          if (dbUser) {
+            setDbUser({ ...dbUser, activeCompanyId: data.activeCompanyId });
+          }
+        }
+        // Reset Form Fields
+        setNewCompanyName('');
+        setNewAddress('');
+        setNewGst('');
+        setNewFy('2026-2027');
+        setNewState('');
+        setNewPhone('');
+        setNewEmail('');
+        setShowCreateModal(false);
+      } else {
+        setFormError(data.error || "Failed to create company.");
+      }
+    } catch (err: any) {
+      setFormError(err.message || "Network error. Please try again.");
+    } finally {
+      setFormSubmitting(false);
+    }
+  };
+
+  const activeCompany = companies.find(c => c._id === activeCompanyId);
+
+  // Loading States
+  if (!isLoaded || syncStatus === 'loading') {
     return (
       <div className="min-h-screen bg-zinc-950 flex items-center justify-center text-zinc-400">
-        <RefreshCw className="h-6 w-6 animate-spin text-emerald-400 mr-2" /> Loading session...
+        <RefreshCw className="h-6 w-6 animate-spin text-emerald-400 mr-2" /> Loading workspace session...
+      </div>
+    );
+  }
+
+  // Error Synchronization States
+  if (syncStatus === 'error') {
+    return (
+      <div className="min-h-screen bg-zinc-950 text-zinc-100 flex items-center justify-center p-6">
+        <div className="max-w-md w-full p-6 rounded-2xl border border-red-900/30 bg-red-950/10 text-center">
+          <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+          <h2 className="text-xl font-bold mb-2">Sync Connection Failure</h2>
+          <p className="text-zinc-400 text-sm mb-6">{errorDetails}</p>
+          <button 
+            onClick={() => window.location.reload()} 
+            className="px-4 py-2 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded-lg text-sm font-semibold transition-all"
+          >
+            Retry Sync
+          </button>
+        </div>
       </div>
     );
   }
@@ -72,8 +421,8 @@ export default function DashboardPage() {
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col font-sans relative overflow-hidden">
       {/* Decorative Glow Elements */}
-      <div className="absolute top-[-10%] right-[-10%] w-[50%] h-[50%] rounded-full bg-emerald-500/5 blur-[120px] pointer-events-none"></div>
-      <div className="absolute bottom-[-10%] left-[-10%] w-[50%] h-[50%] rounded-full bg-teal-500/5 blur-[120px] pointer-events-none"></div>
+      <div className="absolute top-[-15%] right-[-15%] w-[60%] h-[60%] rounded-full bg-emerald-500/5 blur-[150px] pointer-events-none"></div>
+      <div className="absolute bottom-[-15%] left-[-15%] w-[60%] h-[60%] rounded-full bg-teal-500/5 blur-[150px] pointer-events-none"></div>
 
       {/* Nav Header */}
       <header className="border-b border-zinc-900 bg-zinc-950/80 backdrop-blur-md sticky top-0 z-50">
@@ -87,6 +436,11 @@ export default function DashboardPage() {
                 Smart<span className="text-emerald-400">ERP</span>
               </span>
             </Link>
+            {activeCompany && (
+              <span className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 ml-4">
+                <Building2 className="h-3 w-3" /> Active: {activeCompany.companyName}
+              </span>
+            )}
           </div>
 
           <div className="flex items-center gap-4">
@@ -95,92 +449,307 @@ export default function DashboardPage() {
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="flex-1 max-w-5xl w-full mx-auto px-6 py-12 relative z-10 flex flex-col justify-center">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold">Workspace Dashboard</h1>
-          <p className="text-zinc-500 text-sm mt-1">Manage your cloud ledger and tenant configurations.</p>
-        </div>
-
-        {/* Status Panels */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Clerk Auth Profile */}
-          <div className="p-6 rounded-2xl border border-zinc-900 bg-zinc-950/50 backdrop-blur-sm flex flex-col justify-between">
-            <div>
-              <div className="flex items-center gap-2 mb-4">
-                <UserCheck className="h-5 w-5 text-emerald-400" />
-                <h2 className="text-lg font-semibold">Clerk Authenticated Session</h2>
+      {/* Main Workspace Area */}
+      <main className="flex-1 max-w-7xl w-full mx-auto px-6 py-12 relative z-10">
+        
+        {/* VIEW 1: ACTIVE COMPANY WORKSPACE VIEW */}
+        {activeCompanyId && activeCompany ? (
+          <div className="space-y-8 animate-fade-in">
+            {/* Header banner */}
+            <div className="p-8 rounded-3xl border border-zinc-900 bg-gradient-to-r from-zinc-950 via-zinc-900/50 to-zinc-950 backdrop-blur-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+              <div>
+                <span className="text-xs text-emerald-400 font-bold uppercase tracking-widest block mb-1">Company Context Active</span>
+                <h1 className="text-4xl font-extrabold tracking-tight">{activeCompany.companyName}</h1>
+                <p className="text-zinc-400 text-sm mt-1">Financial Year: {activeCompany.financialYear} • State: {activeCompany.state}</p>
               </div>
+              <button 
+                onClick={handleSwitchCompany}
+                className="px-5 py-3 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded-xl text-sm font-semibold transition-all flex items-center gap-2 transform hover:-translate-y-0.5"
+              >
+                <ArrowLeftRight className="h-4 w-4 text-emerald-400" /> Switch Business Profile
+              </button>
+            </div>
+
+            {/* Sub-workspace Placeholder */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* Profile details card */}
+              <div className="p-6 rounded-2xl border border-zinc-900 bg-zinc-950/40 backdrop-blur-sm col-span-1">
+                <h2 className="text-lg font-bold border-b border-zinc-900 pb-3 mb-4">Tenancy Specifications</h2>
+                <div className="space-y-4 text-sm">
+                  {activeCompany.gstNumber && (
+                    <div>
+                      <span className="text-xs text-zinc-500 block">GSTIN NUMBER</span>
+                      <span className="font-mono text-zinc-350">{activeCompany.gstNumber}</span>
+                    </div>
+                  )}
+                  <div>
+                    <span className="text-xs text-zinc-500 block">TAXATION JURISDICTION (STATE)</span>
+                    <span className="text-zinc-350">{activeCompany.state}</span>
+                  </div>
+                  {activeCompany.address && (
+                    <div>
+                      <span className="text-xs text-zinc-500 block">OFFICIAL ADDRESS</span>
+                      <span className="text-zinc-350 leading-relaxed block mt-0.5">{activeCompany.address}</span>
+                    </div>
+                  )}
+                  {activeCompany.contactInfo && (activeCompany.contactInfo.phone || activeCompany.contactInfo.email) && (
+                    <div>
+                      <span className="text-xs text-zinc-500 block">CONTACT DETAILS</span>
+                      <div className="mt-1 space-y-1">
+                        {activeCompany.contactInfo.phone && (
+                          <span className="flex items-center gap-1.5 text-zinc-400"><Phone className="h-3.5 w-3.5" /> {activeCompany.contactInfo.phone}</span>
+                        )}
+                        {activeCompany.contactInfo.email && (
+                          <span className="flex items-center gap-1.5 text-zinc-400"><Mail className="h-3.5 w-3.5" /> {activeCompany.contactInfo.email}</span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Day 4 placeholder: accounts structure */}
+              <div className="p-8 rounded-2xl border border-zinc-900 bg-zinc-950/40 backdrop-blur-sm col-span-2 flex flex-col items-center justify-center text-center p-12 min-h-[300px]">
+                <FileSpreadsheet className="h-12 w-12 text-zinc-600 mb-4 stroke-[1.5]" />
+                <h3 className="text-xl font-bold mb-2">Accounting Modules Pending</h3>
+                <p className="text-zinc-500 text-sm max-w-sm leading-relaxed mb-6">
+                  Ledgers, account groups, and journal vouchers are strictly isolated under this company context.
+                </p>
+                <div className="inline-flex items-center gap-2 text-xs font-semibold px-3 py-1 rounded-full border border-emerald-500/20 bg-emerald-500/5 text-emerald-400 uppercase tracking-wider">
+                  Ready for Day 4 Integration
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : (
+          
+          /* VIEW 2: COMPANY SELECTION / CREATION VIEW */
+          <div className="space-y-10 animate-fade-in">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <h1 className="text-3xl font-extrabold tracking-tight">Select Business Workspace</h1>
+                <p className="text-zinc-500 text-sm mt-1">Choose an existing profile to access accounting books, or create a new profile.</p>
+              </div>
+              <button
+                onClick={() => setShowCreateModal(true)}
+                disabled={companies.length >= 5}
+                className="px-5 py-3 bg-emerald-400 hover:bg-emerald-300 disabled:bg-zinc-800 disabled:text-zinc-500 disabled:border-zinc-900 text-zinc-950 font-bold rounded-xl text-sm transition-all flex items-center gap-2 transform hover:-translate-y-0.5 disabled:transform-none select-none"
+              >
+                <Plus className="h-4 w-4" /> Create New Company
+              </button>
+            </div>
+
+            {/* SaaS limit message banner if at limit */}
+            {companies.length >= 5 && (
+              <div className="p-4 rounded-xl border border-emerald-500/10 bg-emerald-500/5 text-emerald-400 text-xs font-semibold flex items-center gap-2.5 max-w-3xl">
+                <AlertCircle className="h-4.5 w-4.5 shrink-0" />
+                <span>SaaS Limit Reached: You are currently managing the maximum allowable limit of 5 companies. Delete or upgrade to add more.</span>
+              </div>
+            )}
+
+            {/* Companies Load Spinner */}
+            {companiesLoading ? (
+              <div className="flex items-center justify-center py-20 text-zinc-500">
+                <RefreshCw className="h-6 w-6 animate-spin text-emerald-400 mr-2" /> Retrieving company records...
+              </div>
+            ) : companies.length === 0 ? (
               
-              <div className="space-y-3 mt-6">
-                <div>
-                  <span className="text-xs text-zinc-500 block">CLERK USER ID</span>
-                  <span className="text-sm font-mono text-zinc-350 select-all">{userId}</span>
+              /* EMPTY STATE */
+              <div className="border border-dashed border-zinc-800 rounded-3xl p-16 flex flex-col items-center justify-center text-center max-w-3xl mx-auto bg-zinc-950/20">
+                <div className="bg-emerald-500/10 p-5 rounded-2xl w-fit mb-6 border border-emerald-500/15">
+                  <Building2 className="h-10 w-10 text-emerald-400 stroke-[1.5]" />
                 </div>
-                <div>
-                  <span className="text-xs text-zinc-500 block">EMAIL ADDRESS</span>
-                  <span className="text-sm text-zinc-350">{user?.primaryEmailAddress?.emailAddress || 'Resolving email...'}</span>
-                </div>
+                <h2 className="text-2xl font-bold mb-3">No Active Business Profiles</h2>
+                <p className="text-zinc-500 text-sm max-w-md leading-relaxed mb-8">
+                  Get started by establishing your first company context. Enter tax records and location configurations to sync accounting profiles.
+                </p>
+                <button 
+                  onClick={() => setShowCreateModal(true)}
+                  className="px-6 py-3.5 bg-emerald-400 hover:bg-emerald-300 text-zinc-950 font-bold rounded-xl text-sm transition-all flex items-center gap-2 transform hover:-translate-y-0.5 shadow-lg shadow-emerald-500/15"
+                >
+                  Create Your First Company <ArrowRight className="h-4 w-4" />
+                </button>
               </div>
-            </div>
+            ) : (
+              
+              /* COMPANIES LIST GRID */
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {companies.map((company) => (
+                  <div 
+                    key={company._id} 
+                    className="p-6 rounded-2xl border border-zinc-900 bg-zinc-950/50 hover:border-zinc-800 transition-all duration-300 flex flex-col justify-between group"
+                  >
+                    <div>
+                      <div className="flex justify-between items-start gap-4 mb-4">
+                        <div className="bg-zinc-900 p-2.5 rounded-xl border border-zinc-800 text-zinc-400 group-hover:text-emerald-400 group-hover:border-emerald-500/30 transition-colors">
+                          <Building2 className="h-5 w-5 stroke-[2]" />
+                        </div>
+                        <span className="text-[10px] font-bold text-zinc-500 px-2 py-0.5 border border-zinc-800 rounded-full bg-zinc-950">
+                          FY {company.financialYear}
+                        </span>
+                      </div>
+                      
+                      <h3 className="text-lg font-bold text-zinc-100 line-clamp-1 mb-1">{company.companyName}</h3>
+                      <p className="text-zinc-500 text-xs flex items-center gap-1 mb-4"><MapPin className="h-3 w-3" /> {company.state}</p>
+                      
+                      {company.gstNumber && (
+                        <div className="space-y-1 text-xs border-t border-zinc-900/60 pt-3 mt-3">
+                          <span className="text-zinc-500 block">GSTIN</span>
+                          <span className="font-mono text-zinc-300">{company.gstNumber}</span>
+                        </div>
+                      )}
+                    </div>
+                    
+                    <button 
+                      onClick={() => handleEnterCompany(company._id)}
+                      className="w-full mt-6 py-3 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 hover:border-zinc-700 text-zinc-200 hover:text-white font-semibold rounded-xl text-sm transition-all flex items-center justify-center gap-2 group/btn"
+                    >
+                      Enter Workspace 
+                      <ArrowRight className="h-4 w-4 text-emerald-400 group-hover/btn:translate-x-1 transition-transform" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
+        )}
+      </main>
 
-          {/* MongoDB Synchronized Profile */}
-          <div className="p-6 rounded-2xl border border-zinc-900 bg-zinc-950/50 backdrop-blur-sm flex flex-col justify-between">
-            <div>
-              <div className="flex items-center gap-2 mb-4">
-                <Database className="h-5 w-5 text-emerald-400" />
-                <h2 className="text-lg font-semibold">MongoDB Synchronized Context</h2>
-              </div>
-
-              <div className="mt-6">
-                {syncStatus === 'loading' && (
-                  <div className="flex items-center text-sm text-zinc-400">
-                    <RefreshCw className="h-4 w-4 animate-spin text-emerald-400 mr-2" />
-                    Connecting to backend & syncing database...
-                  </div>
-                )}
-
-                {syncStatus === 'success' && dbUser && (
-                  <div className="space-y-3">
-                    <div>
-                      <span className="text-xs text-zinc-500 block font-semibold text-emerald-400">DATABASE USER ID (MONGO _ID)</span>
-                      <span className="text-sm font-mono text-zinc-350 select-all">{dbUser.id}</span>
-                    </div>
-                    <div>
-                      <span className="text-xs text-zinc-500 block font-semibold text-emerald-400">ACTIVE TENANT COMPANY</span>
-                      <span className="text-sm text-zinc-350">
-                        {dbUser.activeCompanyId ? dbUser.activeCompanyId : 'None (No active tenant resolved)'}
-                      </span>
-                    </div>
-                  </div>
-                )}
-
-                {syncStatus === 'error' && (
-                  <div className="p-4 rounded-xl border border-red-900/30 bg-red-950/10 text-red-400 text-sm flex items-start gap-2">
-                    <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" />
-                    <div>
-                      <p className="font-semibold">Sync Failed</p>
-                      <p className="text-xs text-red-500/80 mt-1">{errorDetails}</p>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
+      {/* CREATE NEW COMPANY MODAL OVERLAY */}
+      {showCreateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+          <div className="relative w-full max-w-xl bg-zinc-950 border border-zinc-900 rounded-3xl p-8 shadow-2xl flex flex-col max-h-[90vh] overflow-y-auto">
             
-            <div className="mt-6 border-t border-zinc-900/60 pt-4 flex items-center justify-between text-xs text-zinc-500">
-              <span>Backend status:</span>
-              <span className="inline-flex items-center gap-1.5 font-semibold text-emerald-400">
-                <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span> Connected
-              </span>
+            {/* Header */}
+            <div className="flex justify-between items-start mb-6">
+              <div>
+                <h2 className="text-2xl font-bold flex items-center gap-2">
+                  <Building2 className="h-6 w-6 text-emerald-400" /> Setup Business Workspace
+                </h2>
+                <p className="text-zinc-500 text-xs mt-1">Configure company localized settings for accounting isolation.</p>
+              </div>
             </div>
+
+            {/* Form Error Banner */}
+            {formError && (
+              <div className="p-4 rounded-xl border border-red-900/30 bg-red-950/10 text-red-400 text-xs flex items-start gap-2 mb-6 animate-fade-in">
+                <AlertCircle className="h-4.5 w-4.5 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-semibold">Creation Error</p>
+                  <p className="text-red-500/80 mt-0.5">{formError}</p>
+                </div>
+              </div>
+            )}
+
+            {/* Form Body */}
+            <form onSubmit={handleCreateCompany} className="space-y-5">
+              
+              {/* Row 1: Company Name */}
+              <div>
+                <label className="text-xs text-zinc-400 block mb-1.5 font-semibold">COMPANY NAME *</label>
+                <input 
+                  type="text" 
+                  required
+                  placeholder="e.g. Acme Corporation Pvt. Ltd."
+                  value={newCompanyName}
+                  onChange={(e) => setNewCompanyName(e.target.value)}
+                  className="w-full bg-zinc-900 border border-zinc-800 focus:border-emerald-500/50 rounded-xl px-4 py-3 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none transition-colors"
+                />
+              </div>
+
+              {/* Row 2: FY & State */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs text-zinc-400 block mb-1.5 font-semibold">FINANCIAL YEAR *</label>
+                  <input 
+                    type="text" 
+                    required
+                    placeholder="e.g. 2026-2027"
+                    value={newFy}
+                    onChange={(e) => setNewFy(e.target.value)}
+                    className="w-full bg-zinc-900 border border-zinc-800 focus:border-emerald-500/50 rounded-xl px-4 py-3 text-sm text-zinc-100 placeholder-zinc-650 focus:outline-none transition-colors"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-zinc-400 block mb-1.5 font-semibold">STATE (JURISDICTION) *</label>
+                  <StateCombobox value={newState} onChange={setNewState} />
+                </div>
+              </div>
+
+              {/* Row 3: GSTIN */}
+              <div>
+                <label className="text-xs text-zinc-400 block mb-1.5 font-semibold">GSTIN NUMBER (OPTIONAL)</label>
+                <input 
+                  type="text" 
+                  placeholder="e.g. 27AAAAA1111A1Z1"
+                  value={newGst}
+                  onChange={(e) => setNewGst(e.target.value)}
+                  className="w-full bg-zinc-900 border border-zinc-800 focus:border-emerald-500/50 rounded-xl px-4 py-3 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none transition-colors font-mono"
+                />
+              </div>
+
+              {/* Row 4: Address */}
+              <div>
+                <label className="text-xs text-zinc-400 block mb-1.5 font-semibold">BUSINESS ADDRESS (OPTIONAL)</label>
+                <textarea 
+                  rows={2}
+                  placeholder="Street details, building, city..."
+                  value={newAddress}
+                  onChange={(e) => setNewAddress(e.target.value)}
+                  className="w-full bg-zinc-900 border border-zinc-800 focus:border-emerald-500/50 rounded-xl px-4 py-3 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none transition-colors resize-none"
+                />
+              </div>
+
+              {/* Row 5: Phone & Email */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs text-zinc-400 block mb-1.5 font-semibold">CONTACT PHONE</label>
+                  <input 
+                    type="text" 
+                    placeholder="e.g. +91 9876543210"
+                    value={newPhone}
+                    onChange={(e) => setNewPhone(e.target.value)}
+                    className="w-full bg-zinc-900 border border-zinc-800 focus:border-emerald-500/50 rounded-xl px-4 py-3 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none transition-colors"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-zinc-400 block mb-1.5 font-semibold">CONTACT EMAIL</label>
+                  <input 
+                    type="email" 
+                    placeholder="e.g. accounts@acme.com"
+                    value={newEmail}
+                    onChange={(e) => setNewEmail(e.target.value)}
+                    className="w-full bg-zinc-900 border border-zinc-800 focus:border-emerald-500/50 rounded-xl px-4 py-3 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none transition-colors"
+                  />
+                </div>
+              </div>
+
+              {/* CTAs */}
+              <div className="flex gap-4 justify-end border-t border-zinc-900/60 pt-6 mt-6">
+                <button 
+                  type="button"
+                  onClick={() => setShowCreateModal(false)}
+                  className="px-5 py-3 bg-zinc-900 hover:bg-zinc-850 border border-zinc-800 rounded-xl text-sm font-semibold transition-all"
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit"
+                  disabled={formSubmitting}
+                  className="px-5 py-3 bg-emerald-400 hover:bg-emerald-300 disabled:bg-zinc-800 disabled:text-zinc-500 disabled:border-zinc-900 text-zinc-950 font-bold rounded-xl text-sm transition-all flex items-center gap-2 shadow-lg shadow-emerald-500/10"
+                >
+                  {formSubmitting && <RefreshCw className="h-4 w-4 animate-spin mr-1" />} Sync & Save Profile
+                </button>
+              </div>
+
+            </form>
           </div>
         </div>
-      </main>
+      )}
 
       {/* Footer */}
       <footer className="border-t border-zinc-900 py-8 text-center text-zinc-600 text-xs mt-auto">
-        <p>© 2026 SmartERP. Day 2 Complete: Clerk Multi-Tenant Auth Guard.</p>
+        <p>© 2026 SmartERP. Day 3 Complete: Company Context Switches.</p>
       </footer>
     </div>
   );
