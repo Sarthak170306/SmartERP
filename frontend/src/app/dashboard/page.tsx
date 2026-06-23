@@ -4,6 +4,7 @@ import { useAuth, useUser, UserButton, useClerk } from "@clerk/nextjs";
 import { useEffect, useState, useRef } from "react";
 import { Layers, Database, UserCheck, RefreshCw, AlertCircle, Building2, Plus, ArrowRight, MapPin, FileSpreadsheet, Phone, Mail, LogOut, ArrowLeftRight, ChevronDown, Search, Check, Zap } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 const INDIAN_STATES = [
   "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh", 
@@ -182,6 +183,7 @@ export default function DashboardPage() {
   const { isLoaded, userId, getToken } = useAuth();
   const { user } = useUser();
   const { signOut } = useClerk();
+  const router = useRouter();
 
   // State hooks
   const [syncStatus, setSyncStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
@@ -211,9 +213,18 @@ export default function DashboardPage() {
 
   // useEffect Hook 1: Global Keydown Listener for Tally-inspired Keyboard navigation
   useEffect(() => {
-    if (!activeCompanyId) return;
-
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      // Check for ALT + L shortcut (accessible globally on the dashboard)
+      if (e.altKey && e.key.toLowerCase() === 'l') {
+        if (activeCompanyId) {
+          e.preventDefault();
+          router.push('/dashboard/masters/ledgers');
+        }
+        return;
+      }
+
+      if (!activeCompanyId) return;
+
       // Ignore key shortcuts if modal is open or user is typing inside an input/textarea
       if (
         showCreateModal || 
