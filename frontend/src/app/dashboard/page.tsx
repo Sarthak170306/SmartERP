@@ -206,6 +206,7 @@ export default function DashboardPage() {
   const [newEmail, setNewEmail] = useState<string>('');
   const [formSubmitting, setFormSubmitting] = useState<boolean>(false);
   const [formError, setFormError] = useState<string>('');
+  const [showStockModal, setShowStockModal] = useState<boolean>(false);
   
   // Day 4 Gateway Menu States
   const [menuIndex, setMenuIndex] = useState<number>(0);
@@ -221,6 +222,11 @@ export default function DashboardPage() {
           router.push('/dashboard/masters/ledgers');
         }
         return;
+      }
+
+      if (e.altKey && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        setShowStockModal(prev => !prev);
       }
 
       if (!activeCompanyId) return;
@@ -916,6 +922,49 @@ export default function DashboardPage() {
       <footer className="border-t border-zinc-900 py-8 text-center text-zinc-650 text-xs mt-auto">
         <p>© 2026 SmartERP. Day 4 Complete: Gateway of SmartERP Main Layout.</p>
       </footer>
+
+      {showStockModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[99999] flex items-center justify-center p-4">
+          <form onSubmit={(e) => { e.preventDefault(); alert("Stock Item Created locally!"); setShowStockModal(false); }} className="bg-zinc-900 border border-zinc-800 p-6 rounded-lg max-w-md w-full shadow-2xl space-y-4 text-white">
+            <div className="flex justify-between items-center border-b border-zinc-800 pb-2">
+              <h3 className="text-lg font-bold text-emerald-400">⚡ Create Stock Item (Day 6)</h3>
+              <button type="button" onClick={() => setShowStockModal(false)} className="text-zinc-400 hover:text-white">✕</button>
+            </div>
+            <div>
+              <label className="block text-xs uppercase tracking-wider text-zinc-400 mb-1">Item Name *</label>
+              <input required autoFocus className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-1.5 focus:outline-none focus:border-emerald-500 text-sm text-zinc-100" placeholder="e.g., Logitech Mouse" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs uppercase tracking-wider text-zinc-400 mb-1">SKU Code</label>
+                <input className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-1.5 focus:outline-none focus:border-emerald-500 text-sm text-zinc-100" placeholder="ELEC-001" />
+              </div>
+              <div>
+                <label className="block text-xs uppercase tracking-wider text-zinc-400 mb-1">GST % *</label>
+                <select className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-1.5 focus:outline-none focus:border-emerald-500 text-sm text-white">
+                  <option value="18">18% Standard</option>
+                  <option value="12">12%</option>
+                  <option value="5">5%</option>
+                  <option value="28">28%</option>
+                </select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs uppercase tracking-wider text-zinc-400 mb-1">Purchase Price</label>
+                <input type="number" className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-1.5 focus:outline-none focus:border-emerald-500 text-sm text-zinc-100" placeholder="0" />
+              </div>
+              <div>
+                <label className="block text-xs uppercase tracking-wider text-zinc-400 mb-1">Opening Qty</label>
+                <input type="number" className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-1.5 focus:outline-none focus:border-emerald-500 text-sm text-zinc-100" placeholder="0" />
+              </div>
+            </div>
+            <button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-700 text-black font-bold py-2 rounded text-sm transition-colors mt-4">
+              Save Item (Press ENTER)
+            </button>
+          </form>
+        </div>
+      )}
     </div>
   );
 }
