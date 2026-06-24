@@ -9,6 +9,7 @@ import connectDB from './config/db.js';
 import userRoutes from './routes/userRoutes.js';
 import companyRoutes from './routes/companyRoutes.js';
 import ledgerRoutes from './routes/ledgerRoutes.js';
+import inventoryRoutes from './routes/inventoryRoutes.js';
 
 // Load environment variables from .env file
 dotenv.config();
@@ -71,6 +72,7 @@ app.get('/api/health', (req, res) => {
 app.use('/api/user', userRoutes);
 app.use('/api/companies', companyRoutes);
 app.use('/api/ledgers', ledgerRoutes);
+app.use('/api/inventory', inventoryRoutes);
 
 // Fallback for 404 - Not Found
 app.use((req, res, next) => {
