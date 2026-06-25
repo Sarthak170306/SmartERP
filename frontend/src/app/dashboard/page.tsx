@@ -207,6 +207,8 @@ export default function DashboardPage() {
   const [formSubmitting, setFormSubmitting] = useState<boolean>(false);
   const [formError, setFormError] = useState<string>('');
   const [showStockModal, setShowStockModal] = useState<boolean>(false);
+  const [showVoucherModal, setShowVoucherModal] = useState(false);
+  const [voucherType, setVoucherType] = useState('PAYMENT'); // CONTRA, PAYMENT, RECEIPT
   
   // Day 4 Gateway Menu States
   const [menuIndex, setMenuIndex] = useState<number>(0);
@@ -230,6 +232,10 @@ export default function DashboardPage() {
       }
 
       if (!activeCompanyId) return;
+
+      if (e.key === 'F4') { e.preventDefault(); setVoucherType('CONTRA'); setShowVoucherModal(true); }
+      if (e.key === 'F5') { e.preventDefault(); setVoucherType('PAYMENT'); setShowVoucherModal(true); }
+      if (e.key === 'F6') { e.preventDefault(); setVoucherType('RECEIPT'); setShowVoucherModal(true); }
 
       // Ignore key shortcuts if modal is open or user is typing inside an input/textarea
       if (
@@ -593,6 +599,13 @@ export default function DashboardPage() {
                   <div className="border-b border-zinc-900 pb-4">
                     <span className="text-[10px] text-emerald-400 font-extrabold uppercase tracking-widest block mb-1">Current Company Context</span>
                     <h2 className="text-3xl font-black text-zinc-100 tracking-tight leading-tight">{activeCompany.companyName}</h2>
+                  </div>
+
+                  <div className="my-3 p-3 bg-zinc-950 border border-zinc-800 rounded flex gap-2 items-center">
+                    <span className="text-xs text-zinc-400 uppercase tracking-wider font-mono">Vouchers (Click/Keys):</span>
+                    <button type="button" onClick={() => { setVoucherType('CONTRA'); setShowVoucherModal(true); }} className="bg-blue-900/40 hover:bg-blue-800 text-blue-400 border border-blue-800 px-3 py-1 rounded text-xs font-bold">F4: Contra</button>
+                    <button type="button" onClick={() => { setVoucherType('PAYMENT'); setShowVoucherModal(true); }} className="bg-amber-900/40 hover:bg-amber-800 text-amber-400 border border-amber-800 px-3 py-1 rounded text-xs font-bold">F5: Payment</button>
+                    <button type="button" onClick={() => { setVoucherType('RECEIPT'); setShowVoucherModal(true); }} className="bg-emerald-900/40 hover:bg-emerald-800 text-emerald-400 border border-emerald-800 px-3 py-1 rounded text-xs font-bold">F6: Receipt</button>
                   </div>
 
                   <div className="grid grid-cols-2 gap-5 text-sm">
@@ -961,6 +974,73 @@ export default function DashboardPage() {
             </div>
             <button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-700 text-black font-bold py-2 rounded text-sm transition-colors mt-4">
               Save Item (Press ENTER)
+            </button>
+          </form>
+        </div>
+      )}
+
+      {showVoucherModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[99999] flex items-center justify-center p-4">
+          <form onSubmit={async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.currentTarget);
+            const debitLedgerId = formData.get('debitLedgerId');
+            const creditLedgerId = formData.get('creditLedgerId');
+            const amount = formData.get('amount');
+            const narration = formData.get('narration');
+            
+            try {
+              const token = await getToken();
+              const res = await fetch("http://localhost:5000/api/vouchers/create", {
+                method: "POST",
+                headers: {
+                  "Authorization": `Bearer ${token}`,
+                  "Content-Type": "application/json",
+                  "x-company-id": activeCompanyId || ""
+                },
+                body: JSON.stringify({
+                  voucherType,
+                  debitLedgerId,
+                  creditLedgerId,
+                  amount,
+                  narration
+                })
+              });
+              
+              const data = await res.json();
+              if (res.ok) {
+                alert(`Voucher ${voucherType} created successfully!`);
+                setShowVoucherModal(false);
+              } else {
+                alert(`Error creating voucher: ${data.error || 'Unknown error'}`);
+              }
+            } catch (err) {
+              console.error("Voucher creation client error:", err);
+              alert("Network error creating voucher.");
+            }
+          }} className="bg-zinc-900 border border-zinc-800 p-6 rounded-lg max-w-md w-full text-white space-y-4">
+            <div className="flex justify-between items-center border-b border-zinc-800 pb-2">
+              <h3 className="text-md font-bold uppercase tracking-wide text-amber-400">⚡ {voucherType} VOUCHER (Day 8)</h3>
+              <button type="button" onClick={() => setShowVoucherModal(false)} className="text-zinc-500 hover:text-white">✕</button>
+            </div>
+            <div>
+              <label className="block text-xs uppercase text-zinc-400 mb-1">Particulars (Debit Account)</label>
+              <input name="debitLedgerId" required placeholder="Enter Debit Ledger ID or selection" className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-amber-500" />
+            </div>
+            <div>
+              <label className="block text-xs uppercase text-zinc-400 mb-1">Particulars (Credit Account)</label>
+              <input name="creditLedgerId" required placeholder="Enter Credit Ledger ID or selection" className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-amber-500" />
+            </div>
+            <div>
+              <label className="block text-xs uppercase text-zinc-400 mb-1">Amount (INR)</label>
+              <input name="amount" type="number" required placeholder="0.00" className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-amber-500" />
+            </div>
+            <div>
+              <label className="block text-xs uppercase text-zinc-400 mb-1">Narration</label>
+              <textarea name="narration" placeholder="Being payment made for..." className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-amber-500 h-16 resize-none" />
+            </div>
+            <button type="submit" className="w-full bg-amber-500 hover:bg-amber-600 text-black font-bold py-2 rounded text-sm transition-colors">
+              Accept Voucher (ENTER)
             </button>
           </form>
         </div>

@@ -10,6 +10,7 @@ import userRoutes from './routes/userRoutes.js';
 import companyRoutes from './routes/companyRoutes.js';
 import ledgerRoutes from './routes/ledgerRoutes.js';
 import inventoryRoutes from './routes/inventoryRoutes.js';
+import voucherRoutes from './routes/voucherRoutes.js';
 
 // Load environment variables from .env file
 dotenv.config();
@@ -73,6 +74,7 @@ app.use('/api/user', userRoutes);
 app.use('/api/companies', companyRoutes);
 app.use('/api/ledgers', ledgerRoutes);
 app.use('/api/inventory', inventoryRoutes);
+app.use('/api/vouchers', voucherRoutes);
 
 // Fallback for 404 - Not Found
 app.use((req, res, next) => {
