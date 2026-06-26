@@ -195,4 +195,22 @@ router.get('/', requireAuth, async (req, res) => {
   }
 });
 
+/**
+ * GET /api/ledgers/list
+ * Decoupled endpoint returning a direct array of all ledgers for a company
+ */
+router.get('/list', async (req, res) => {
+  try {
+    const companyId = req.headers['x-company-id'];
+    if (!companyId) {
+      return res.status(400).json({ error: 'Company ID is required in x-company-id header.' });
+    }
+    const ledgers = await Ledger.find({ companyId }).sort({ ledgerName: 1 });
+    return res.status(200).json(ledgers);
+  } catch (error) {
+    console.error('List ledgers error:', error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
 export default router;

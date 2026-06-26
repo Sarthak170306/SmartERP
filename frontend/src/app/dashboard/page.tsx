@@ -209,6 +209,12 @@ export default function DashboardPage() {
   const [showStockModal, setShowStockModal] = useState<boolean>(false);
   const [showVoucherModal, setShowVoucherModal] = useState(false);
   const [voucherType, setVoucherType] = useState('PAYMENT'); // CONTRA, PAYMENT, RECEIPT
+  const [availableLedgers, setAvailableLedgers] = useState<any[]>([]);
+  const [debitLedgerId, setDebitLedgerId] = useState<string>('');
+  const [creditLedgerId, setCreditLedgerId] = useState<string>('');
+  const [showLedgerModal, setShowLedgerModal] = useState(false);
+  const [ledgerGroups, setLedgerGroups] = useState<any[]>([]);
+  const [selectedGroupId, setSelectedGroupId] = useState<string>('');
   
   // Day 4 Gateway Menu States
   const [menuIndex, setMenuIndex] = useState<number>(0);
@@ -327,6 +333,71 @@ export default function DashboardPage() {
     }
   }, [syncStatus]);
 
+  // Day 9: Fetch company ledgers for voucher entries
+  async function fetchCompanyLedgers() {
+    if (!activeCompanyId) return;
+    try {
+      const res = await fetch("http://localhost:5000/api/ledgers/list", {
+        method: "GET",
+        headers: {
+          "x-company-id": activeCompanyId
+        }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setAvailableLedgers(data);
+        if (data.length > 0) {
+          setDebitLedgerId(data[0]._id);
+          setCreditLedgerId(data.length > 1 ? data[1]._id : data[0]._id);
+        }
+      } else {
+        console.error("Failed to fetch available ledgers");
+      }
+    } catch (err) {
+      console.error("Error fetching ledgers:", err);
+    }
+  }
+
+  useEffect(() => {
+    if (showVoucherModal && activeCompanyId) {
+      fetchCompanyLedgers();
+    }
+  }, [showVoucherModal, activeCompanyId]);
+
+  // Day 9: Fetch company ledger groups for ledger creation modal
+  async function fetchCompanyLedgerGroups() {
+    if (!activeCompanyId) return;
+    try {
+      const token = await getToken();
+      const res = await fetch("http://localhost:5000/api/ledgers/groups", {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "x-company-id": activeCompanyId
+        }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.groups) {
+          setLedgerGroups(data.groups);
+          if (data.groups.length > 0) {
+            setSelectedGroupId(data.groups[0]._id);
+          }
+        }
+      } else {
+        console.error("Failed to fetch ledger groups");
+      }
+    } catch (err) {
+      console.error("Error fetching ledger groups:", err);
+    }
+  }
+
+  useEffect(() => {
+    if (showLedgerModal && activeCompanyId) {
+      fetchCompanyLedgerGroups();
+    }
+  }, [showLedgerModal, activeCompanyId]);
+
   // custom handlers & helper functions defined after all hook calls
   function handleMenuAction(message: string) {
     setActionNotification(message);
@@ -342,7 +413,10 @@ export default function DashboardPage() {
       displayLabel: () => <span>Accounts Info &gt; <span className="text-red-500 font-extrabold">L</span>edgers</span>, 
       hotkey: "L", 
       section: "MASTERS", 
-      action: () => handleMenuAction("Masters: Ledgers Configuration module activated") 
+      action: () => {
+        handleMenuAction("Masters: Ledgers Configuration module activated");
+        setShowLedgerModal(true);
+      }
     },
     { 
       label: "Groups Configuration", 
@@ -1011,6 +1085,7 @@ export default function DashboardPage() {
               if (res.ok) {
                 alert(`Voucher ${voucherType} created successfully!`);
                 setShowVoucherModal(false);
+                fetchCompanyLedgers(); // Day 9: Re-fetch sequence
               } else {
                 alert(`Error creating voucher: ${data.error || 'Unknown error'}`);
               }
@@ -1020,16 +1095,48 @@ export default function DashboardPage() {
             }
           }} className="bg-zinc-900 border border-zinc-800 p-6 rounded-lg max-w-md w-full text-white space-y-4">
             <div className="flex justify-between items-center border-b border-zinc-800 pb-2">
-              <h3 className="text-md font-bold uppercase tracking-wide text-amber-400">⚡ {voucherType} VOUCHER (Day 8)</h3>
+              <h3 className="text-md font-bold uppercase tracking-wide text-amber-400">⚡ {voucherType} VOUCHER (Day 9)</h3>
               <button type="button" onClick={() => setShowVoucherModal(false)} className="text-zinc-500 hover:text-white">✕</button>
             </div>
             <div>
               <label className="block text-xs uppercase text-zinc-400 mb-1">Particulars (Debit Account)</label>
-              <input name="debitLedgerId" required placeholder="Enter Debit Ledger ID or selection" className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-amber-500" />
+              <select
+                name="debitLedgerId"
+                required
+                value={debitLedgerId}
+                onChange={(e) => setDebitLedgerId(e.target.value)}
+                className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-amber-500 text-white"
+              >
+                {availableLedgers.length === 0 ? (
+                  <option value="">No Ledgers Available</option>
+                ) : (
+                  availableLedgers.map((ledger) => (
+                    <option key={ledger._id} value={ledger._id}>
+                      {ledger.ledgerName || ledger.name} (Bal: {ledger.currentBalance})
+                    </option>
+                  ))
+                )}
+              </select>
             </div>
             <div>
               <label className="block text-xs uppercase text-zinc-400 mb-1">Particulars (Credit Account)</label>
-              <input name="creditLedgerId" required placeholder="Enter Credit Ledger ID or selection" className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-amber-500" />
+              <select
+                name="creditLedgerId"
+                required
+                value={creditLedgerId}
+                onChange={(e) => setCreditLedgerId(e.target.value)}
+                className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-amber-500 text-white"
+              >
+                {availableLedgers.length === 0 ? (
+                  <option value="">No Ledgers Available</option>
+                ) : (
+                  availableLedgers.map((ledger) => (
+                    <option key={ledger._id} value={ledger._id}>
+                      {ledger.ledgerName || ledger.name} (Bal: {ledger.currentBalance})
+                    </option>
+                  ))
+                )}
+              </select>
             </div>
             <div>
               <label className="block text-xs uppercase text-zinc-400 mb-1">Amount (INR)</label>
@@ -1041,6 +1148,80 @@ export default function DashboardPage() {
             </div>
             <button type="submit" className="w-full bg-amber-500 hover:bg-amber-600 text-black font-bold py-2 rounded text-sm transition-colors">
               Accept Voucher (ENTER)
+            </button>
+          </form>
+        </div>
+      )}
+
+      {showLedgerModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[99999] flex items-center justify-center p-4">
+          <form onSubmit={async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.currentTarget);
+            const ledgerName = formData.get('ledgerName');
+            const openingBalance = formData.get('openingBalance');
+            
+            try {
+              const token = await getToken();
+              const res = await fetch("http://localhost:5000/api/ledgers/create", {
+                method: "POST",
+                headers: {
+                  "Authorization": `Bearer ${token}`,
+                  "Content-Type": "application/json",
+                  "x-company-id": activeCompanyId || ""
+                },
+                body: JSON.stringify({
+                  ledgerName,
+                  groupId: selectedGroupId,
+                  companyId: activeCompanyId,
+                  openingBalance: Number(openingBalance) || 0
+                })
+              });
+              
+              const data = await res.json();
+              if (res.ok) {
+                alert("Ledger Created Successfully!");
+                setShowLedgerModal(false);
+                fetchCompanyLedgers(); // Day 9: Refresh available ledgers in dropdowns
+              } else {
+                alert(`Error creating ledger: ${data.error || 'Unknown error'}`);
+              }
+            } catch (err) {
+              console.error("Ledger creation client error:", err);
+              alert("Network error creating ledger.");
+            }
+          }} className="bg-zinc-900 border border-zinc-800 p-6 rounded-lg max-w-md w-full text-white space-y-4 shadow-2xl">
+            <div className="flex justify-between items-center border-b border-zinc-800 pb-2">
+              <h3 className="text-md font-bold text-emerald-400">🆕 CREATE LEDGER MASTER</h3>
+              <button type="button" onClick={() => setShowLedgerModal(false)} className="text-zinc-500 hover:text-white">✕</button>
+            </div>
+            <div>
+              <label className="block text-xs uppercase text-zinc-400 mb-1">Ledger Name</label>
+              <input name="ledgerName" required placeholder="e.g., Cash A/c or Rent Expense" className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-emerald-500 text-zinc-100" />
+            </div>
+            <div>
+              <label className="block text-xs uppercase text-zinc-400 mb-1">Under Group</label>
+              <select
+                name="groupId"
+                value={selectedGroupId}
+                onChange={(e) => setSelectedGroupId(e.target.value)}
+                className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-emerald-500 text-white"
+              >
+                {ledgerGroups.length === 0 ? (
+                  <option value="">No Groups Available</option>
+                ) : (
+                  ledgerGroups.map((g) => (
+                    <option key={g._id} value={g._id}>{g.groupName}</option>
+                  ))
+                )}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs uppercase text-zinc-400 mb-1">Opening Balance (INR)</label>
+              <input name="openingBalance" type="number" defaultValue="0" className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-emerald-500 text-zinc-100" />
+            </div>
+            <button type="submit" className="w-full bg-emerald-500 hover:bg-emerald-600 text-black font-bold py-2 rounded text-sm transition-colors">
+              Save Ledger (ENTER)
             </button>
           </form>
         </div>
