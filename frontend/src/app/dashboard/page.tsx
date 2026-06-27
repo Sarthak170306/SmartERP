@@ -215,6 +215,7 @@ export default function DashboardPage() {
   const [showLedgerModal, setShowLedgerModal] = useState(false);
   const [ledgerGroups, setLedgerGroups] = useState<any[]>([]);
   const [selectedGroupId, setSelectedGroupId] = useState<string>('');
+  const [voucherError, setVoucherError] = useState<string>('');
   
   // Day 4 Gateway Menu States
   const [menuIndex, setMenuIndex] = useState<number>(0);
@@ -359,8 +360,11 @@ export default function DashboardPage() {
   }
 
   useEffect(() => {
-    if (showVoucherModal && activeCompanyId) {
-      fetchCompanyLedgers();
+    if (showVoucherModal) {
+      setVoucherError('');
+      if (activeCompanyId) {
+        fetchCompanyLedgers();
+      }
     }
   }, [showVoucherModal, activeCompanyId]);
 
@@ -1076,28 +1080,34 @@ export default function DashboardPage() {
                   voucherType,
                   debitLedgerId,
                   creditLedgerId,
-                  amount,
+                  amount: Number(amount),
                   narration
                 })
               });
               
               const data = await res.json();
-              if (res.ok) {
+              if (res.status === 201) {
                 alert(`Voucher ${voucherType} created successfully!`);
+                setVoucherError('');
                 setShowVoucherModal(false);
                 fetchCompanyLedgers(); // Day 9: Re-fetch sequence
               } else {
-                alert(`Error creating voucher: ${data.error || 'Unknown error'}`);
+                setVoucherError(data.error || 'Unknown error');
               }
             } catch (err) {
               console.error("Voucher creation client error:", err);
-              alert("Network error creating voucher.");
+              setVoucherError("Network error creating voucher.");
             }
           }} className="bg-zinc-900 border border-zinc-800 p-6 rounded-lg max-w-md w-full text-white space-y-4">
             <div className="flex justify-between items-center border-b border-zinc-800 pb-2">
-              <h3 className="text-md font-bold uppercase tracking-wide text-amber-400">⚡ {voucherType} VOUCHER (Day 9)</h3>
+              <h3 className={`text-md font-bold uppercase tracking-wide ${
+                voucherType === 'CONTRA' ? 'text-blue-400' :
+                voucherType === 'PAYMENT' ? 'text-amber-400' :
+                voucherType === 'RECEIPT' ? 'text-emerald-400' : 'text-amber-400'
+              }`}>⚡ {voucherType} VOUCHER (Day 10)</h3>
               <button type="button" onClick={() => setShowVoucherModal(false)} className="text-zinc-500 hover:text-white">✕</button>
             </div>
+            {voucherError && <div className="p-2.5 text-xs text-rose-400 bg-rose-950/40 border border-rose-900 rounded font-mono">{voucherError}</div>}
             <div>
               <label className="block text-xs uppercase text-zinc-400 mb-1">Particulars (Debit Account)</label>
               <select
@@ -1152,6 +1162,7 @@ export default function DashboardPage() {
           </form>
         </div>
       )}
+
 
       {showLedgerModal && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[99999] flex items-center justify-center p-4">
