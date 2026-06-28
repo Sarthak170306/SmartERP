@@ -2,7 +2,7 @@
 
 import { useAuth, useUser, UserButton, useClerk } from "@clerk/nextjs";
 import { useEffect, useState, useRef } from "react";
-import { Layers, Database, UserCheck, RefreshCw, AlertCircle, Building2, Plus, ArrowRight, MapPin, FileSpreadsheet, Phone, Mail, LogOut, ArrowLeftRight, ChevronDown, Search, Check, Zap } from "lucide-react";
+import { Layers, Database, UserCheck, RefreshCw, AlertCircle, Building2, Plus, ArrowRight, MapPin, FileSpreadsheet, Phone, Mail, LogOut, ArrowLeftRight, ChevronDown, Search, Check, Zap, Printer, FileText } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -217,6 +217,15 @@ export default function DashboardPage() {
   const [selectedGroupId, setSelectedGroupId] = useState<string>('');
   const [voucherError, setVoucherError] = useState<string>('');
   
+  // Day 11: Reports & Ledger Statement States
+  const [statementLedgerId, setStatementLedgerId] = useState<string>('');
+  const [ledgerLogs, setLedgerLogs] = useState<any[]>([]);
+  
+  // Day 12: Reports & Trial Balance States
+  const [showTrialBalance, setShowTrialBalance] = useState(false);
+  const [trialBalanceData, setTrialBalanceData] = useState<any>(null);
+  const [trialBalanceLoading, setTrialBalanceLoading] = useState(false);
+  
   // Day 4 Gateway Menu States
   const [menuIndex, setMenuIndex] = useState<number>(0);
   const [actionNotification, setActionNotification] = useState<string | null>(null);
@@ -362,11 +371,77 @@ export default function DashboardPage() {
   useEffect(() => {
     if (showVoucherModal) {
       setVoucherError('');
-      if (activeCompanyId) {
-        fetchCompanyLedgers();
-      }
+    }
+    if (activeCompanyId) {
+      fetchCompanyLedgers();
     }
   }, [showVoucherModal, activeCompanyId]);
+
+  // Day 11: Fetch ledger statement
+  async function fetchLedgerStatement(ledgerId: string) {
+    if (!ledgerId || !activeCompanyId) {
+      setLedgerLogs([]);
+      return;
+    }
+    try {
+      const token = await getToken();
+      const res = await fetch(`http://localhost:5000/api/vouchers/ledger-statement/${ledgerId}`, {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "x-company-id": activeCompanyId
+        }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setLedgerLogs(data);
+      } else {
+        console.error("Failed to fetch ledger statement");
+      }
+    } catch (err) {
+      console.error("Error fetching ledger statement:", err);
+    }
+  }
+
+  useEffect(() => {
+    if (activeCompanyId && statementLedgerId) {
+      fetchLedgerStatement(statementLedgerId);
+    } else {
+      setLedgerLogs([]);
+    }
+  }, [statementLedgerId, activeCompanyId]);
+
+  // Day 12: Fetch trial balance report
+  async function fetchTrialBalance() {
+    if (!activeCompanyId) return;
+    setTrialBalanceLoading(true);
+    try {
+      const token = await getToken();
+      const res = await fetch("http://localhost:5000/api/reports/trial-balance", {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "x-company-id": activeCompanyId
+        }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setTrialBalanceData(data);
+      } else {
+        console.error("Failed to fetch trial balance report");
+      }
+    } catch (err) {
+      console.error("Error fetching trial balance:", err);
+    } finally {
+      setTrialBalanceLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (showTrialBalance && activeCompanyId) {
+      fetchTrialBalance();
+    }
+  }, [showTrialBalance, activeCompanyId]);
 
   // Day 9: Fetch company ledger groups for ledger creation modal
   async function fetchCompanyLedgerGroups() {
@@ -455,7 +530,10 @@ export default function DashboardPage() {
       displayLabel: () => <span><span className="text-red-500 font-extrabold">T</span>ariff / Trial Balance</span>, 
       hotkey: "T", 
       section: "REPORTS", 
-      action: () => handleMenuAction("Reports: Trial Balance report generated") 
+      action: () => {
+        handleMenuAction("Reports: Trial Balance report generated");
+        setShowTrialBalance(true);
+      }
     },
     { 
       label: "Switch Company", 
@@ -774,6 +852,108 @@ export default function DashboardPage() {
               </div>
 
             </div>
+
+            {/* Day 11: Ledger Statement & Live Audit REPORTS panel */}
+            <div id="ledger-statement-print-area" className="bg-zinc-950 p-8 rounded-3xl border border-zinc-900 shadow-2xl relative space-y-6">
+              <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-zinc-900 pb-4 gap-4">
+                <div>
+                  <span className="text-[10px] text-emerald-400 font-extrabold uppercase tracking-widest block mb-1">REPORTS & STATEMENTS</span>
+                  <h3 className="text-xl font-black text-zinc-100 tracking-tight">Ledger Statement & Live Audit</h3>
+                </div>
+                <div className="flex items-center gap-3 no-print">
+                  <label className="text-xs uppercase text-zinc-400 font-bold font-mono">Select Account:</label>
+                  <select
+                    value={statementLedgerId}
+                    onChange={(e) => setStatementLedgerId(e.target.value)}
+                    className="bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2 text-xs focus:outline-none focus:border-emerald-500 text-white font-semibold shadow-inner"
+                  >
+                    <option value="">-- Select Ledger --</option>
+                    {availableLedgers.map((ledger) => (
+                      <option key={ledger._id} value={ledger._id}>
+                        {ledger.ledgerName || ledger.name} (Bal: ₹{Number(ledger.currentBalance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })})
+                      </option>
+                    ))}
+                  </select>
+                  {statementLedgerId && ledgerLogs.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => window.print()}
+                      className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-zinc-950 font-bold rounded-xl text-xs transition-colors flex items-center gap-1.5 shadow-md shadow-emerald-500/10"
+                    >
+                      <Printer className="h-3.5 w-3.5" /> Print Statement
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {!statementLedgerId ? (
+                <div className="text-center py-12 text-zinc-500 text-xs border border-dashed border-zinc-900 rounded-2xl bg-zinc-950/20">
+                  Select a ledger from the dropdown above to audit statement logs.
+                </div>
+              ) : ledgerLogs.length === 0 ? (
+                <div className="text-center py-12 text-zinc-500 text-xs border border-dashed border-zinc-900 rounded-2xl bg-zinc-950/20">
+                  No voucher entries found for this ledger.
+                </div>
+              ) : (
+                <div className="overflow-x-auto border border-zinc-900 rounded-2xl bg-zinc-950/40">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="border-b border-zinc-900 bg-zinc-900/10 text-zinc-400 font-bold uppercase tracking-wider">
+                        <th className="p-4 font-mono">Date</th>
+                        <th className="p-4">Type</th>
+                        <th className="p-4">Debit/Credit</th>
+                        <th className="p-4 text-right">Amount</th>
+                        <th className="p-4 text-right">Balance Effect</th>
+                        <th className="p-4">Narration</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-900/60 font-mono">
+                      {ledgerLogs.map((log) => {
+                        const isDebit = log.debitLedgerId === statementLedgerId;
+                        const effect = isDebit ? `+` : `-`;
+                        
+                        return (
+                          <tr key={log._id} className="hover:bg-zinc-900/25 transition-colors">
+                            <td className="p-4 text-zinc-400">
+                              {new Date(log.createdAt).toLocaleDateString('en-IN', {
+                                day: '2-digit',
+                                month: 'short',
+                                year: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}
+                            </td>
+                            <td className="p-4">
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold border ${
+                                log.voucherType === 'PAYMENT' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
+                                log.voucherType === 'RECEIPT' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
+                                'bg-blue-500/10 text-blue-400 border-blue-500/20'
+                              }`}>
+                                {log.voucherType}
+                              </span>
+                            </td>
+                            <td className="p-4">
+                              <span className={`font-bold ${isDebit ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                {isDebit ? 'Debit (Dr)' : 'Credit (Cr)'}
+                              </span>
+                            </td>
+                            <td className="p-4 text-right text-zinc-200 font-bold">
+                              ₹{Number(log.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                            </td>
+                            <td className={`p-4 text-right font-bold ${isDebit ? 'text-emerald-400' : 'text-rose-400'}`}>
+                              {effect}₹{Number(log.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                            </td>
+                            <td className="p-4 text-zinc-300 italic max-w-xs truncate">
+                              {log.narration || '-'}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
           </div>
         ) : (
           
@@ -1091,6 +1271,12 @@ export default function DashboardPage() {
                 setVoucherError('');
                 setShowVoucherModal(false);
                 fetchCompanyLedgers(); // Day 9: Re-fetch sequence
+                if (statementLedgerId) {
+                  fetchLedgerStatement(statementLedgerId);
+                }
+                if (showTrialBalance) {
+                  fetchTrialBalance();
+                }
               } else {
                 setVoucherError(data.error || 'Unknown error');
               }
@@ -1237,6 +1423,169 @@ export default function DashboardPage() {
           </form>
         </div>
       )}
+
+      {/* Day 12: Trial Balance Modal Overlay */}
+      {showTrialBalance && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[99999] flex items-center justify-center p-4">
+          <div className="bg-zinc-900 border border-zinc-800 p-8 rounded-3xl max-w-4xl w-full text-white space-y-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center border-b border-zinc-800 pb-4">
+              <div>
+                <span className="text-[10px] text-emerald-400 font-extrabold uppercase tracking-widest block mb-1">Financial Report</span>
+                <h3 className="text-xl font-black text-zinc-100 tracking-tight flex items-center gap-2">
+                  <FileText className="h-5 w-5 text-emerald-400" /> Trial Balance Statement
+                </h3>
+              </div>
+              <button type="button" onClick={() => setShowTrialBalance(false)} className="text-zinc-500 hover:text-white text-lg">✕</button>
+            </div>
+
+            {trialBalanceLoading ? (
+              <div className="flex justify-center items-center py-20 text-zinc-400 text-xs">
+                <RefreshCw className="h-5 w-5 animate-spin text-emerald-400 mr-2" /> Loading aggregated ledgers...
+              </div>
+            ) : !trialBalanceData ? (
+              <div className="text-center py-20 text-zinc-500 text-xs">
+                No trial balance data available.
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {/* 2-Column Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Left Column: Debit Balances */}
+                  <div className="space-y-3">
+                    <h4 className="text-xs uppercase tracking-wider text-emerald-400 font-bold border-b border-zinc-800 pb-1.5 flex justify-between">
+                      <span>Debit Accounts (Assets/Expenses)</span>
+                      <span>Debit (Dr)</span>
+                    </h4>
+                    <div className="space-y-2 max-h-[45vh] overflow-y-auto pr-1">
+                      {trialBalanceData.assets.length === 0 ? (
+                        <p className="text-xs text-zinc-650 italic">No debit balance ledgers found.</p>
+                      ) : (
+                        trialBalanceData.assets.map((item: any) => (
+                          <div key={item._id} className="flex justify-between items-center text-xs bg-zinc-950/40 p-2.5 rounded-lg border border-zinc-900/50 hover:border-zinc-800/60 transition-colors font-mono">
+                            <div>
+                              <span className="text-zinc-200 font-bold block">{item.ledgerName}</span>
+                              <p className="text-xs text-zinc-500 uppercase">{item.groupName || item.category || 'Account'}</p>
+                            </div>
+                            <span className="text-zinc-300 font-bold">
+                              ₹{Number(item.currentBalance).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                            </span>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Right Column: Credit Balances */}
+                  <div className="space-y-3">
+                    <h4 className="text-xs uppercase tracking-wider text-blue-400 font-bold border-b border-zinc-800 pb-1.5 flex justify-between">
+                      <span>Credit Accounts (Liabilities/Equity/Income)</span>
+                      <span>Credit (Cr)</span>
+                    </h4>
+                    <div className="space-y-2 max-h-[45vh] overflow-y-auto pr-1">
+                      {trialBalanceData.liabilities.length === 0 ? (
+                        <p className="text-xs text-zinc-650 italic">No credit balance ledgers found.</p>
+                      ) : (
+                        trialBalanceData.liabilities.map((item: any) => (
+                          <div key={item._id} className="flex justify-between items-center text-xs bg-zinc-950/40 p-2.5 rounded-lg border border-zinc-900/50 hover:border-zinc-800/60 transition-colors font-mono">
+                            <div>
+                              <span className="text-zinc-200 font-bold block">{item.ledgerName}</span>
+                              <p className="text-xs text-zinc-500 uppercase">{item.groupName || item.category || 'Account'}</p>
+                            </div>
+                            <span className="text-zinc-300 font-bold">
+                              ₹{Number(item.currentBalance).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                            </span>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Bottom Summary Bar */}
+                <div className="grid grid-cols-2 gap-4 border-t border-zinc-800 pt-4 font-mono text-sm bg-zinc-900/30 p-4 rounded-2xl border border-zinc-850">
+                  <div className="flex justify-between items-center font-black">
+                    <span className="text-zinc-400 uppercase text-xs">Total Debit:</span>
+                    <span className="text-emerald-400">
+                      ₹{Number(trialBalanceData.totalDebit).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center font-black">
+                    <span className="text-zinc-400 uppercase text-xs">Total Credit:</span>
+                    <span className="text-blue-400">
+                      ₹{Number(trialBalanceData.totalCredit).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                  
+                  {/* Balancing Status Badge */}
+                  {(() => {
+                    const difference = Math.abs(trialBalanceData.totalDebit - trialBalanceData.totalCredit);
+                    return (
+                      <div className="col-span-2 border-t border-zinc-900/50 pt-3 flex justify-between items-center text-xs">
+                        <span className="text-zinc-500 uppercase font-mono tracking-wider">Statement Reconciliation:</span>
+                        {difference < 0.01 ? (
+                          <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-3 py-1 rounded-full font-bold uppercase tracking-wider">
+                            ✓ Balanced
+                          </span>
+                        ) : (
+                          <span className="bg-rose-500/10 text-rose-400 border border-rose-500/20 px-3 py-1 rounded-full font-bold uppercase tracking-wider">
+                            ⚠ Out of Balance (Diff: ₹{difference.toLocaleString('en-IN', { minimumFractionDigits: 2 })})
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })()}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Global CSS block for Print overrides */}
+      <style>{`
+        @media print {
+          body {
+            background: white !important;
+            color: black !important;
+          }
+          body * {
+            visibility: hidden;
+          }
+          #ledger-statement-print-area, #ledger-statement-print-area * {
+            visibility: visible;
+          }
+          #ledger-statement-print-area {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            background: white !important;
+            color: black !important;
+            border: none !important;
+            box-shadow: none !important;
+            padding: 0 !important;
+            margin: 0 !important;
+          }
+          #ledger-statement-print-area table {
+            border: 1px solid #000 !important;
+            width: 100% !important;
+          }
+          #ledger-statement-print-area th {
+            color: black !important;
+            background: #f0f0f0 !important;
+            border-bottom: 2px solid #000 !important;
+            padding: 8px !important;
+          }
+          #ledger-statement-print-area td {
+            color: black !important;
+            border-bottom: 1px solid #ccc !important;
+            padding: 8px !important;
+          }
+          .no-print {
+            display: none !important;
+          }
+        }
+      `}</style>
     </div>
   );
 }

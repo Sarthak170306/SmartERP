@@ -95,4 +95,36 @@ router.post('/create', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/vouchers/ledger-statement/:ledgerId
+ * Fetches all vouchers where the selected ledger is either debited or credited under the active company
+ */
+router.get('/ledger-statement/:ledgerId', async (req, res) => {
+  try {
+    const { ledgerId } = req.params;
+    const companyId = req.headers['x-company-id'];
+
+    if (!companyId) {
+      return res.status(400).json({ error: 'Company ID is required in x-company-id header.' });
+    }
+
+    if (!ledgerId) {
+      return res.status(400).json({ error: 'Ledger ID is required.' });
+    }
+
+    const vouchers = await Voucher.find({
+      companyId,
+      $or: [
+        { debitLedgerId: ledgerId },
+        { creditLedgerId: ledgerId }
+      ]
+    }).sort({ createdAt: -1 });
+
+    return res.status(200).json(vouchers);
+  } catch (error) {
+    console.error('Fetch ledger statement error:', error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
 export default router;
