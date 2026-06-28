@@ -112,13 +112,25 @@ router.get('/ledger-statement/:ledgerId', async (req, res) => {
       return res.status(400).json({ error: 'Ledger ID is required.' });
     }
 
-    const vouchers = await Voucher.find({
+    const { voucherType, searchQuery } = req.query;
+
+    const filter = {
       companyId,
       $or: [
         { debitLedgerId: ledgerId },
         { creditLedgerId: ledgerId }
       ]
-    }).sort({ createdAt: -1 });
+    };
+
+    if (voucherType && voucherType !== 'ALL') {
+      filter.voucherType = voucherType;
+    }
+
+    if (searchQuery && searchQuery.trim() !== '') {
+      filter.narration = { $regex: searchQuery.trim(), $options: 'i' };
+    }
+
+    const vouchers = await Voucher.find(filter).sort({ createdAt: -1 });
 
     return res.status(200).json(vouchers);
   } catch (error) {

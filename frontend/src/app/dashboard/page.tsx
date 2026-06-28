@@ -226,6 +226,10 @@ export default function DashboardPage() {
   const [trialBalanceData, setTrialBalanceData] = useState<any>(null);
   const [trialBalanceLoading, setTrialBalanceLoading] = useState(false);
   
+  // Day 13: Reports Search/Filters States
+  const [voucherFilterType, setVoucherFilterType] = useState<string>('ALL');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  
   // Day 4 Gateway Menu States
   const [menuIndex, setMenuIndex] = useState<number>(0);
   const [actionNotification, setActionNotification] = useState<string | null>(null);
@@ -377,15 +381,28 @@ export default function DashboardPage() {
     }
   }, [showVoucherModal, activeCompanyId]);
 
-  // Day 11: Fetch ledger statement
-  async function fetchLedgerStatement(ledgerId: string) {
+  // Day 11 & Day 13: Fetch ledger statement with query search filters
+  async function fetchLedgerStatement(ledgerId: string, filterType?: string, search?: string) {
     if (!ledgerId || !activeCompanyId) {
       setLedgerLogs([]);
       return;
     }
     try {
       const token = await getToken();
-      const res = await fetch(`http://localhost:5000/api/vouchers/ledger-statement/${ledgerId}`, {
+      const fType = filterType !== undefined ? filterType : voucherFilterType;
+      const qSearch = search !== undefined ? search : searchQuery;
+      
+      const params = new URLSearchParams();
+      if (fType && fType !== 'ALL') {
+        params.append('voucherType', fType);
+      }
+      if (qSearch && qSearch.trim() !== '') {
+        params.append('searchQuery', qSearch.trim());
+      }
+      
+      const queryString = params.toString() ? `?${params.toString()}` : '';
+      
+      const res = await fetch(`http://localhost:5000/api/vouchers/ledger-statement/${ledgerId}${queryString}`, {
         method: "GET",
         headers: {
           "Authorization": `Bearer ${token}`,
@@ -403,13 +420,18 @@ export default function DashboardPage() {
     }
   }
 
+  // Day 13: Debounced effect trigger for filter/search queries
   useEffect(() => {
     if (activeCompanyId && statementLedgerId) {
-      fetchLedgerStatement(statementLedgerId);
+      const delayDebounceFn = setTimeout(() => {
+        fetchLedgerStatement(statementLedgerId, voucherFilterType, searchQuery);
+      }, 300);
+
+      return () => clearTimeout(delayDebounceFn);
     } else {
       setLedgerLogs([]);
     }
-  }, [statementLedgerId, activeCompanyId]);
+  }, [statementLedgerId, voucherFilterType, searchQuery, activeCompanyId]);
 
   // Day 12: Fetch trial balance report
   async function fetchTrialBalance() {
@@ -885,6 +907,36 @@ export default function DashboardPage() {
                   )}
                 </div>
               </div>
+
+              {statementLedgerId && (
+                <div className="flex flex-col sm:flex-row gap-4 bg-zinc-900/20 p-4 rounded-2xl border border-zinc-900/65 no-print items-center">
+                  <div className="flex-1 w-full relative">
+                    <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <Search className="h-3.5 w-3.5 text-zinc-650" />
+                    </span>
+                    <input
+                      type="text"
+                      placeholder="Filter transactions by narration keywords..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="w-full bg-zinc-950 border border-zinc-850 rounded-xl pl-9 pr-4 py-2 text-xs text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/30 transition-all font-mono"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto">
+                    <label className="text-[10px] uppercase text-zinc-500 font-extrabold tracking-wider font-mono">Type:</label>
+                    <select
+                      value={voucherFilterType}
+                      onChange={(e) => setVoucherFilterType(e.target.value)}
+                      className="w-full sm:w-auto bg-zinc-950 border border-zinc-850 rounded-xl px-4 py-2 text-xs text-zinc-300 font-semibold focus:outline-none focus:border-emerald-500/50 transition-colors cursor-pointer"
+                    >
+                      <option value="ALL">All Vouchers</option>
+                      <option value="PAYMENT">Payment</option>
+                      <option value="RECEIPT">Receipt</option>
+                      <option value="CONTRA">Contra</option>
+                    </select>
+                  </div>
+                </div>
+              )}
 
               {!statementLedgerId ? (
                 <div className="text-center py-12 text-zinc-500 text-xs border border-dashed border-zinc-900 rounded-2xl bg-zinc-950/20">
