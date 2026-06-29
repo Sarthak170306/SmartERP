@@ -230,6 +230,10 @@ export default function DashboardPage() {
   const [voucherFilterType, setVoucherFilterType] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
   
+  // Day 14: Inventory Stocks & Item Master States
+  const [showItemModal, setShowItemModal] = useState<boolean>(false);
+  const [inventoryItems, setInventoryItems] = useState<any[]>([]);
+  
   // Day 4 Gateway Menu States
   const [menuIndex, setMenuIndex] = useState<number>(0);
   const [actionNotification, setActionNotification] = useState<string | null>(null);
@@ -465,6 +469,37 @@ export default function DashboardPage() {
     }
   }, [showTrialBalance, activeCompanyId]);
 
+  // Day 14: Fetch inventory items list
+  async function fetchInventoryItems() {
+    if (!activeCompanyId) return;
+    try {
+      const token = await getToken();
+      const res = await fetch("http://localhost:5000/api/items/list", {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "x-company-id": activeCompanyId
+        }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setInventoryItems(data);
+      } else {
+        console.error("Failed to fetch inventory items list");
+      }
+    } catch (err) {
+      console.error("Error fetching inventory items:", err);
+    }
+  }
+
+  useEffect(() => {
+    if (activeCompanyId) {
+      fetchInventoryItems();
+    } else {
+      setInventoryItems([]);
+    }
+  }, [activeCompanyId]);
+
   // Day 9: Fetch company ledger groups for ledger creation modal
   async function fetchCompanyLedgerGroups() {
     if (!activeCompanyId) return;
@@ -525,6 +560,16 @@ export default function DashboardPage() {
       hotkey: "G", 
       section: "MASTERS", 
       action: () => handleMenuAction("Masters: Account Groups Configuration module activated") 
+    },
+    { 
+      label: "Stock Items", 
+      displayLabel: () => <span>Inventory Info &gt; Stock <span className="text-red-500 font-extrabold">I</span>tems</span>, 
+      hotkey: "I", 
+      section: "INVENTORY INFO", 
+      action: () => {
+        handleMenuAction("Inventory Info: Stock Items module activated");
+        setShowItemModal(true);
+      }
     },
     { 
       label: "Accounting Vouchers", 
@@ -834,7 +879,7 @@ export default function DashboardPage() {
 
                   {/* Menu items list */}
                   <div className="p-3 flex flex-col divide-y divide-zinc-900/40">
-                    {["MASTERS", "TRANSACTIONS", "REPORTS", "UTILITIES"].map((section) => {
+                    {["MASTERS", "INVENTORY INFO", "TRANSACTIONS", "REPORTS", "UTILITIES"].map((section) => {
                       const sectionItems = menuItems.filter(item => item.section === section);
                       if (sectionItems.length === 0) return null;
 
@@ -1472,6 +1517,100 @@ export default function DashboardPage() {
             <button type="submit" className="w-full bg-emerald-500 hover:bg-emerald-600 text-black font-bold py-2 rounded text-sm transition-colors">
               Save Ledger (ENTER)
             </button>
+          </form>
+        </div>
+      )}
+
+      {showItemModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[99999] flex items-center justify-center p-4">
+          <form onSubmit={async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.currentTarget);
+            const itemName = formData.get('itemName');
+            const sku = formData.get('sku');
+            const unit = formData.get('unit');
+            const openingQty = formData.get('openingQty');
+            const purchasePrice = formData.get('purchasePrice');
+            const sellingPrice = formData.get('sellingPrice');
+            const reorderLevel = formData.get('reorderLevel');
+            
+            try {
+              const token = await getToken();
+              const res = await fetch("http://localhost:5000/api/items/create", {
+                method: "POST",
+                headers: {
+                  "Authorization": `Bearer ${token}`,
+                  "Content-Type": "application/json",
+                  "x-company-id": activeCompanyId || ""
+                },
+                body: JSON.stringify({
+                  itemName,
+                  sku,
+                  unit,
+                  openingQty: Number(openingQty) || 0,
+                  purchasePrice: Number(purchasePrice) || 0,
+                  sellingPrice: Number(sellingPrice) || 0,
+                  reorderLevel: Number(reorderLevel) || 0
+                })
+              });
+              
+              const data = await res.json();
+              if (res.ok) {
+                alert("Stock Item Created Successfully!");
+                setShowItemModal(false);
+                fetchInventoryItems(); // Day 14: Refresh inventory items state
+              } else {
+                alert(`Error creating stock item: ${data.error || 'Unknown error'}`);
+              }
+            } catch (err) {
+              console.error("Stock item creation client error:", err);
+              alert("Network error creating stock item.");
+            }
+          }} className="bg-zinc-900 border border-zinc-800 p-6 rounded-lg max-w-md w-full text-white space-y-4 shadow-2xl">
+            <div className="flex justify-between items-center border-b border-zinc-800 pb-2">
+              <h3 className="text-md font-bold text-emerald-400">📦 CREATE STOCK ITEM</h3>
+              <button type="button" onClick={() => setShowItemModal(false)} className="text-zinc-500 hover:text-white">✕</button>
+            </div>
+            <div>
+              <label className="block text-xs uppercase text-zinc-400 mb-1">Item Name</label>
+              <input name="itemName" required placeholder="e.g., Lenovo laptop" className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-emerald-500 text-zinc-100" />
+            </div>
+            <div>
+              <label className="block text-xs uppercase text-zinc-400 mb-1">SKU (Unique Code)</label>
+              <input name="sku" required placeholder="e.g., LNV-LP-01" className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-emerald-500 text-zinc-100" />
+            </div>
+            <div>
+              <label className="block text-xs uppercase text-zinc-400 mb-1">Unit</label>
+              <select name="unit" defaultValue="PCS" className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-emerald-500 text-zinc-100">
+                {['PCS', 'BOX', 'KGS', 'LTRS'].map(u => (
+                  <option key={u} value={u}>{u}</option>
+                ))}
+              </select>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs uppercase text-zinc-400 mb-1">Opening Qty</label>
+                <input type="number" name="openingQty" defaultValue="0" min="0" className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-emerald-500 text-zinc-100" />
+              </div>
+              <div>
+                <label className="block text-xs uppercase text-zinc-400 mb-1">Reorder Level</label>
+                <input type="number" name="reorderLevel" defaultValue="0" min="0" className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-emerald-500 text-zinc-100" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs uppercase text-zinc-400 mb-1">Purchase Price (₹)</label>
+                <input type="number" step="0.01" name="purchasePrice" defaultValue="0.00" min="0" className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-emerald-500 text-zinc-100" />
+              </div>
+              <div>
+                <label className="block text-xs uppercase text-zinc-400 mb-1">Selling Price (₹)</label>
+                <input type="number" step="0.01" name="sellingPrice" defaultValue="0.00" min="0" className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-emerald-500 text-zinc-100" />
+              </div>
+            </div>
+            <div className="pt-2 flex justify-end gap-3">
+              <button type="button" onClick={() => setShowItemModal(false)} className="px-4 py-2 rounded bg-zinc-850 hover:bg-zinc-800 text-xs font-bold transition-colors">Cancel</button>
+              <button type="submit" className="px-4 py-2 rounded bg-emerald-500 hover:bg-emerald-600 text-zinc-950 font-bold text-xs transition-colors">Create Stock Item</button>
+            </div>
           </form>
         </div>
       )}
