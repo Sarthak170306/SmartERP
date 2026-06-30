@@ -67,7 +67,14 @@ router.get('/list', requireAuth, async (req, res) => {
     }
 
     const items = await Item.find({ companyId }).sort({ itemName: 1 });
-    return res.status(200).json(items);
+
+    const itemsWithValuation = items.map(item => {
+      const itemObj = item.toObject();
+      itemObj.valuation = (Number(itemObj.currentQty) || 0) * (Number(itemObj.purchasePrice) || 0);
+      return itemObj;
+    });
+
+    return res.status(200).json(itemsWithValuation);
   } catch (error) {
     console.error('List items error:', error);
     return res.status(500).json({ error: error.message });

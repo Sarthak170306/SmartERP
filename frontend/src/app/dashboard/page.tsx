@@ -1051,6 +1051,94 @@ export default function DashboardPage() {
                 </div>
               )}
             </div>
+
+            {/* Day 15: Stock Summary & Inventory Audit Dashboard Panel */}
+            <div className="bg-zinc-950 p-8 rounded-3xl border border-zinc-900 shadow-2xl relative space-y-6">
+              <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-zinc-900 pb-4 gap-4">
+                <div>
+                  <span className="text-[10px] text-emerald-400 font-extrabold uppercase tracking-widest block mb-1">INVENTORY STATUS & STOCK ALERTS</span>
+                  <h3 className="text-xl font-black text-zinc-100 tracking-tight">Stock Summary & Inventory Audit</h3>
+                </div>
+              </div>
+
+              {inventoryItems.length === 0 ? (
+                <div className="text-center py-12 text-zinc-500 text-xs border border-dashed border-zinc-900 rounded-2xl bg-zinc-950/20">
+                  No stock items found. Go to MASTERS &gt; Stock Items to create your inventory list.
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="overflow-x-auto border border-zinc-900 rounded-2xl bg-zinc-950/40">
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead>
+                        <tr className="border-b border-zinc-900 bg-zinc-900/10 text-zinc-400 font-bold uppercase tracking-wider">
+                          <th className="p-4">Item Name</th>
+                          <th className="p-4 font-mono">SKU</th>
+                          <th className="p-4">Unit</th>
+                          <th className="p-4 text-right">Current Stock</th>
+                          <th className="p-4 text-right">Reorder Level</th>
+                          <th className="p-4 text-right">Purchase Price</th>
+                          <th className="p-4 text-right">Selling Price</th>
+                          <th className="p-4 text-right font-mono">Total Valuation</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-zinc-900/60 font-mono">
+                        {inventoryItems.map((item) => {
+                          const isBelowReorder = item.currentQty <= item.reorderLevel;
+                          return (
+                            <tr
+                              key={item._id}
+                              className={`transition-colors hover:bg-zinc-900/20 ${
+                                isBelowReorder ? 'bg-amber-950/15 border-l-2 border-l-amber-500/50' : ''
+                              }`}
+                            >
+                              <td className="p-4 font-bold text-zinc-200">
+                                <div className="flex items-center gap-2">
+                                  <span>{item.itemName}</span>
+                                  {isBelowReorder && (
+                                    <span className="bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded text-[9px] font-bold tracking-wider animate-pulse">
+                                      ⚠️ REORDER ALERT
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="p-4 text-zinc-400">{item.sku}</td>
+                              <td className="p-4 text-zinc-400">{item.unit}</td>
+                              <td className={`p-4 text-right font-bold ${isBelowReorder ? 'text-amber-400' : 'text-zinc-200'}`}>
+                                {item.currentQty}
+                              </td>
+                              <td className="p-4 text-right text-zinc-500">{item.reorderLevel}</td>
+                              <td className="p-4 text-right text-zinc-300">
+                                ₹{Number(item.purchasePrice || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                              </td>
+                              <td className="p-4 text-right text-zinc-300">
+                                ₹{Number(item.sellingPrice || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                              </td>
+                              <td className="p-4 text-right text-emerald-400 font-extrabold">
+                                ₹{Number(item.valuation || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Summary Bar */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-zinc-900/30 p-4 rounded-2xl border border-zinc-850 font-mono text-sm">
+                    <div className="flex justify-between items-center px-2">
+                      <span className="text-zinc-500 uppercase text-xs">Total Items Count:</span>
+                      <span className="text-zinc-250 font-bold">{inventoryItems.length}</span>
+                    </div>
+                    <div className="flex justify-between items-center px-2">
+                      <span className="text-zinc-500 uppercase text-xs">Total Inventory Stock Value:</span>
+                      <span className="text-emerald-400 font-black">
+                        ₹{inventoryItems.reduce((acc, curr) => acc + (Number(curr.valuation) || 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         ) : (
           
