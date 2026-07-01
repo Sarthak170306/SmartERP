@@ -233,6 +233,14 @@ export default function DashboardPage() {
   // Day 14: Inventory Stocks & Item Master States
   const [showItemModal, setShowItemModal] = useState<boolean>(false);
   const [inventoryItems, setInventoryItems] = useState<any[]>([]);
+
+  // Day 16: Sales Invoice & Multi-Row Billing States
+  const [showInvoiceModal, setShowInvoiceModal] = useState<boolean>(false);
+  const [invoiceRows, setInvoiceRows] = useState<any[]>([
+    { id: 'row-initial', itemId: '', qty: 1, rate: 0, amount: 0 }
+  ]);
+  const [invoiceTax, setInvoiceTax] = useState<number>(0);
+  const [customerName, setCustomerName] = useState('');
   
   // Day 4 Gateway Menu States
   const [menuIndex, setMenuIndex] = useState<number>(0);
@@ -260,6 +268,7 @@ export default function DashboardPage() {
       if (e.key === 'F4') { e.preventDefault(); setVoucherType('CONTRA'); setShowVoucherModal(true); }
       if (e.key === 'F5') { e.preventDefault(); setVoucherType('PAYMENT'); setShowVoucherModal(true); }
       if (e.key === 'F6') { e.preventDefault(); setVoucherType('RECEIPT'); setShowVoucherModal(true); }
+      if (e.key === 'F8') { e.preventDefault(); setShowInvoiceModal(true); }
 
       // Ignore key shortcuts if modal is open or user is typing inside an input/textarea
       if (
@@ -543,6 +552,34 @@ export default function DashboardPage() {
     return () => clearTimeout(timeout);
   }
 
+  const handleInvoiceRowChange = (id: string, field: string, value: any) => {
+    setInvoiceRows(prev =>
+      prev.map(row => {
+        if (row.id !== id) return row;
+        const updatedRow = { ...row, [field]: value };
+        if (field === 'itemId') {
+          const selectedItem = inventoryItems.find(item => item._id === value);
+          updatedRow.rate = selectedItem ? selectedItem.sellingPrice : 0;
+        }
+        const qty = Number(updatedRow.qty) || 0;
+        const rate = Number(updatedRow.rate) || 0;
+        updatedRow.amount = qty * rate;
+        return updatedRow;
+      })
+    );
+  };
+
+  const addInvoiceRow = () => {
+    setInvoiceRows(prev => [
+      ...prev,
+      { id: `row-${Math.random().toString(36).substr(2, 9)}`, itemId: '', qty: 1, rate: 0, amount: 0 }
+    ]);
+  };
+
+  const removeInvoiceRow = (id: string) => {
+    setInvoiceRows(prev => prev.filter(row => row.id !== id));
+  };
+
   const menuItems = [
     { 
       label: "Accounts Info / Ledgers", 
@@ -577,6 +614,16 @@ export default function DashboardPage() {
       hotkey: "V", 
       section: "TRANSACTIONS", 
       action: () => handleMenuAction("Transactions: Accounting Vouchers entry activated") 
+    },
+    { 
+      label: "Sales Invoice", 
+      displayLabel: () => <span>Vouchers &gt; Sales <span className="text-red-500 font-extrabold">I</span>nvoice (F8)</span>, 
+      hotkey: "N", 
+      section: "VOUCHERS / INVOICES", 
+      action: () => {
+        handleMenuAction("Transactions: Sales Invoice creator activated");
+        setShowInvoiceModal(true);
+      }
     },
     { 
       label: "Balance Sheet", 
@@ -879,7 +926,7 @@ export default function DashboardPage() {
 
                   {/* Menu items list */}
                   <div className="p-3 flex flex-col divide-y divide-zinc-900/40">
-                    {["MASTERS", "INVENTORY INFO", "TRANSACTIONS", "REPORTS", "UTILITIES"].map((section) => {
+                    {["MASTERS", "INVENTORY INFO", "TRANSACTIONS", "VOUCHERS / INVOICES", "REPORTS", "UTILITIES"].map((section) => {
                       const sectionItems = menuItems.filter(item => item.section === section);
                       if (sectionItems.length === 0) return null;
 
@@ -1698,6 +1745,212 @@ export default function DashboardPage() {
             <div className="pt-2 flex justify-end gap-3">
               <button type="button" onClick={() => setShowItemModal(false)} className="px-4 py-2 rounded bg-zinc-850 hover:bg-zinc-800 text-xs font-bold transition-colors">Cancel</button>
               <button type="submit" className="px-4 py-2 rounded bg-emerald-500 hover:bg-emerald-600 text-zinc-950 font-bold text-xs transition-colors">Create Stock Item</button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {showInvoiceModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[99999] flex items-center justify-center p-4">
+          <form onSubmit={async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.currentTarget);
+            const customerName = formData.get('customerName');
+            const date = formData.get('invoiceDate');
+            
+            // Validate items
+            const filteredItems = invoiceRows.filter(row => row.itemId);
+            if (filteredItems.length === 0) {
+              alert("Please add at least one stock item to post.");
+              return;
+            }
+
+            try {
+              const token = await getToken();
+              const res = await fetch("http://localhost:5000/api/invoices/create", {
+                method: "POST",
+                headers: {
+                  "Authorization": `Bearer ${token}`,
+                  "Content-Type": "application/json",
+                  "x-company-id": activeCompanyId || ""
+                },
+                body: JSON.stringify({
+                  customerName,
+                  date,
+                  items: filteredItems.map(row => ({
+                    itemId: row.itemId,
+                    qty: Number(row.qty) || 1,
+                    rate: Number(row.rate) || 0
+                  })),
+                  taxAmount: Number(invoiceTax) || 0
+                })
+              });
+              
+              const data = await res.json();
+              if (res.ok) {
+                alert("Sales Invoice posted successfully!");
+                setShowInvoiceModal(false);
+                setInvoiceRows([{ id: 'row-initial', itemId: '', qty: 1, rate: 0, amount: 0 }]);
+                setInvoiceTax(0);
+                setCustomerName('');
+                
+                // Dynamic dual re-fetch cycle
+                fetchInventoryItems(); 
+                fetchCompanyLedgers(); 
+              } else {
+                alert(`Error posting invoice: ${data.error || 'Unknown error'}`);
+              }
+            } catch (err) {
+              console.error("Invoice creation client error:", err);
+              alert("Network error posting invoice.");
+            }
+          }} className="bg-zinc-900 border border-zinc-800 p-6 rounded-3xl max-w-4xl w-full text-white space-y-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center border-b border-zinc-800 pb-3">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">🧾</span>
+                <h3 className="text-md font-bold text-emerald-400">CREATE SALES INVOICE (Day 16)</h3>
+              </div>
+              <button type="button" onClick={() => setShowInvoiceModal(false)} className="text-zinc-500 hover:text-white">✕</button>
+            </div>
+            
+            {/* Header info */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs uppercase text-zinc-400 mb-1">Customer Name</label>
+                <input
+                  name="customerName"
+                  required
+                  placeholder="e.g., Acme Corporation"
+                  autoComplete="new-password-override"
+                  value={customerName}
+                  onChange={(e) => setCustomerName(e.target.value)}
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-emerald-500 text-zinc-100"
+                />
+              </div>
+              <div>
+                <label className="block text-xs uppercase text-zinc-400 mb-1">Invoice Date</label>
+                <input type="date" name="invoiceDate" defaultValue={new Date().toISOString().substr(0, 10)} required className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-emerald-500 text-zinc-100 font-mono" />
+              </div>
+            </div>
+
+            {/* Dynamic Items Table */}
+            <div className="space-y-3">
+              <label className="block text-xs uppercase text-zinc-400 font-bold tracking-wider">Line Items Billing Grid</label>
+              <div className="border border-zinc-800 rounded-2xl overflow-hidden bg-zinc-950/40">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="border-b border-zinc-800 bg-zinc-900/10 text-zinc-400 font-bold uppercase tracking-wider font-mono">
+                      <th className="p-3 w-1/2">Select Stock Item</th>
+                      <th className="p-3 text-right w-1/12">Qty</th>
+                      <th className="p-3 text-right w-2/12">Rate (₹)</th>
+                      <th className="p-3 text-right w-2/12">Amount (₹)</th>
+                      <th className="p-3 text-center w-1/12">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-850 font-mono">
+                    {invoiceRows.map((row, index) => (
+                      <tr key={row.id} className="hover:bg-zinc-900/25 transition-colors">
+                        <td className="p-3">
+                          <select
+                            value={row.itemId}
+                            required
+                            onChange={(e) => handleInvoiceRowChange(row.id, 'itemId', e.target.value)}
+                            className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-emerald-500 text-white font-semibold cursor-pointer"
+                          >
+                            <option value="">-- Choose Stock Item --</option>
+                            {inventoryItems.map(item => (
+                              <option key={item._id} value={item._id}>
+                                {item.itemName} (SKU: {item.sku}) [Price: ₹{item.sellingPrice}]
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+                        <td className="p-3">
+                          <input
+                            type="number"
+                            min="1"
+                            value={row.qty}
+                            onChange={(e) => handleInvoiceRowChange(row.id, 'qty', Math.max(1, Number(e.target.value) || 0))}
+                            className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-right text-white focus:outline-none focus:border-emerald-500 font-bold"
+                          />
+                        </td>
+                        <td className="p-3">
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={row.rate}
+                            onChange={(e) => handleInvoiceRowChange(row.id, 'rate', Math.max(0, Number(e.target.value) || 0))}
+                            className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-right text-white focus:outline-none focus:border-emerald-500"
+                          />
+                        </td>
+                        <td className="p-3 text-right text-zinc-300 font-extrabold pr-4">
+                          ₹{Number(row.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="p-3 text-center">
+                          <button
+                            type="button"
+                            disabled={invoiceRows.length <= 1}
+                            onClick={() => removeInvoiceRow(row.id)}
+                            className="px-2.5 py-1.5 bg-rose-500/10 hover:bg-rose-500 text-rose-400 hover:text-zinc-950 disabled:bg-zinc-900 disabled:text-zinc-650 font-bold rounded-xl text-xs transition-all border border-rose-500/20 disabled:border-transparent select-none cursor-pointer"
+                          >
+                            ✕
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <button
+                type="button"
+                onClick={addInvoiceRow}
+                className="px-4 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 font-bold rounded-xl text-xs transition-colors flex items-center gap-1.5 shadow"
+              >
+                ➕ Add Item Row
+              </button>
+            </div>
+
+            {/* Calculations & Totals */}
+            {(() => {
+              const grossTotal = invoiceRows.reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
+              const netPayable = grossTotal + invoiceTax;
+              return (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-zinc-800 pt-4 font-mono text-sm bg-zinc-950/20 p-4 rounded-2xl border border-zinc-850">
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-zinc-500 uppercase text-xs">Gross Subtotal:</span>
+                      <span className="text-zinc-300 font-bold">
+                        ₹{grossTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center gap-3">
+                      <span className="text-zinc-500 uppercase text-xs shrink-0">Tax / Addl Charges (₹):</span>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        name="taxAmount"
+                        value={invoiceTax}
+                        onChange={(e) => setInvoiceTax(Math.max(0, Number(e.target.value) || 0))}
+                        className="bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-1.5 text-xs text-right text-white focus:outline-none focus:border-emerald-500 w-28 font-bold"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex flex-col justify-center items-end border-t md:border-t-0 md:border-l border-zinc-800 pt-3 md:pt-0 md:pl-6">
+                    <span className="text-zinc-500 uppercase text-xs font-bold tracking-wider mb-1">Net Payable Amount</span>
+                    <span className="text-2xl font-black text-emerald-400">
+                      ₹{netPayable.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                </div>
+              );
+            })()}
+
+            <div className="pt-2 flex justify-end gap-3 border-t border-zinc-800 pt-4">
+              <button type="button" onClick={() => setShowInvoiceModal(false)} className="px-4 py-2 rounded bg-zinc-850 hover:bg-zinc-800 text-xs font-bold transition-colors">Cancel</button>
+              <button type="submit" className="px-5 py-2.5 rounded bg-emerald-500 hover:bg-emerald-600 text-zinc-950 font-bold text-xs transition-colors shadow shadow-emerald-500/10">Post Sales Invoice</button>
             </div>
           </form>
         </div>
