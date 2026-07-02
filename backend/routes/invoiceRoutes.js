@@ -17,7 +17,7 @@ router.post('/create', requireAuth, async (req, res) => {
       return res.status(400).json({ error: 'Company ID is required in x-company-id header.' });
     }
 
-    let { invoiceNumber, customerName, date, items, taxAmount } = req.body;
+    let { invoiceNumber, customerName, date, items } = req.body;
 
     if (!customerName || !customerName.trim()) {
       return res.status(400).json({ error: 'Customer name is required.' });
@@ -66,8 +66,12 @@ router.post('/create', requireAuth, async (req, res) => {
       });
     }
 
-    const tax = Number(taxAmount) || 0;
-    const netPayable = grossTotal + tax;
+    const taxRate = 18; // Standard 18% GST default
+    const taxAmount = grossTotal * (taxRate / 100);
+    const cgst = taxAmount / 2;
+    const sgst = taxAmount / 2;
+    const igst = 0;
+    const netPayable = grossTotal + taxAmount;
 
     // Create Invoice
     const newInvoice = new Invoice({
@@ -77,7 +81,11 @@ router.post('/create', requireAuth, async (req, res) => {
       date: date ? new Date(date) : new Date(),
       items: processedItems,
       grossTotal,
-      taxAmount: tax,
+      taxRate,
+      taxAmount,
+      cgst,
+      sgst,
+      igst,
       netPayable
     });
 
@@ -92,7 +100,8 @@ router.post('/create', requireAuth, async (req, res) => {
       );
     }
 
-    return res.status(201).json(newInvoice);
+    const populatedInvoice = await Invoice.findById(newInvoice._id).populate('items.itemId');
+    return res.status(201).json(populatedInvoice);
   } catch (error) {
     console.error('Invoice creation error:', error);
     return res.status(500).json({ error: error.message });

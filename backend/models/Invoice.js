@@ -62,6 +62,22 @@ const invoiceSchema = new mongoose.Schema(
       type: Number,
       default: 0
     },
+    cgst: {
+      type: Number,
+      default: 0
+    },
+    sgst: {
+      type: Number,
+      default: 0
+    },
+    igst: {
+      type: Number,
+      default: 0
+    },
+    taxRate: {
+      type: Number,
+      default: 18
+    },
     netPayable: {
       type: Number,
       required: [true, 'Net payable is required'],

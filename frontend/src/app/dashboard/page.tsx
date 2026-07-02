@@ -241,6 +241,8 @@ export default function DashboardPage() {
   ]);
   const [invoiceTax, setInvoiceTax] = useState<number>(0);
   const [customerName, setCustomerName] = useState('');
+  const [activeInvoiceForPrint, setActiveInvoiceForPrint] = useState<any | null>(null);
+  const [showPrintSlipModal, setShowPrintSlipModal] = useState<boolean>(false);
   
   // Day 4 Gateway Menu States
   const [menuIndex, setMenuIndex] = useState<number>(0);
@@ -1788,7 +1790,10 @@ export default function DashboardPage() {
               
               const data = await res.json();
               if (res.ok) {
-                alert("Sales Invoice posted successfully!");
+                // Day 17: Set active invoice for print slip modal
+                setActiveInvoiceForPrint(data);
+                setShowPrintSlipModal(true);
+
                 setShowInvoiceModal(false);
                 setInvoiceRows([{ id: 'row-initial', itemId: '', qty: 1, rate: 0, amount: 0 }]);
                 setInvoiceTax(0);
@@ -1915,7 +1920,11 @@ export default function DashboardPage() {
             {/* Calculations & Totals */}
             {(() => {
               const grossTotal = invoiceRows.reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
-              const netPayable = grossTotal + invoiceTax;
+              const taxRate = 18;
+              const taxAmount = grossTotal * (taxRate / 100);
+              const cgst = taxAmount / 2;
+              const sgst = taxAmount / 2;
+              const netPayable = grossTotal + taxAmount;
               return (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-zinc-800 pt-4 font-mono text-sm bg-zinc-950/20 p-4 rounded-2xl border border-zinc-850">
                   <div className="space-y-2">
@@ -1925,22 +1934,22 @@ export default function DashboardPage() {
                         ₹{grossTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                       </span>
                     </div>
-                    <div className="flex justify-between items-center gap-3">
-                      <span className="text-zinc-500 uppercase text-xs shrink-0">Tax / Addl Charges (₹):</span>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        name="taxAmount"
-                        value={invoiceTax}
-                        onChange={(e) => setInvoiceTax(Math.max(0, Number(e.target.value) || 0))}
-                        className="bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-1.5 text-xs text-right text-white focus:outline-none focus:border-emerald-500 w-28 font-bold"
-                      />
+                    <div className="flex justify-between items-center">
+                      <span className="text-zinc-500 uppercase text-xs">CGST (9%):</span>
+                      <span className="text-zinc-400">
+                        ₹{cgst.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-zinc-500 uppercase text-xs">SGST (9%):</span>
+                      <span className="text-zinc-400">
+                        ₹{sgst.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      </span>
                     </div>
                   </div>
                   <div className="flex flex-col justify-center items-end border-t md:border-t-0 md:border-l border-zinc-800 pt-3 md:pt-0 md:pl-6">
-                    <span className="text-zinc-500 uppercase text-xs font-bold tracking-wider mb-1">Net Payable Amount</span>
-                    <span className="text-2xl font-black text-emerald-400">
+                    <span className="text-zinc-500 uppercase text-xs font-bold tracking-wider mb-1">Net Payable Amount (Incl. 18% GST)</span>
+                    <span className="text-2xl font-black text-emerald-400 font-bold">
                       ₹{netPayable.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                     </span>
                   </div>
@@ -1953,6 +1962,153 @@ export default function DashboardPage() {
               <button type="submit" className="px-5 py-2.5 rounded bg-emerald-500 hover:bg-emerald-600 text-zinc-950 font-bold text-xs transition-colors shadow shadow-emerald-500/10">Post Sales Invoice</button>
             </div>
           </form>
+        </div>
+      )}
+
+      {showPrintSlipModal && activeInvoiceForPrint && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[99999] flex items-center justify-center p-4">
+          <div className="bg-zinc-900 border border-zinc-800 p-8 rounded-3xl max-w-2xl w-full text-white space-y-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
+            
+            {/* Embedded print overrides targeting *only* the invoice container */}
+            <style dangerouslySetInnerHTML={{__html: `
+              @media print {
+                body * {
+                  visibility: hidden !important;
+                }
+                #tax-invoice-slip, #tax-invoice-slip * {
+                  visibility: visible !important;
+                }
+                #tax-invoice-slip {
+                  position: absolute !important;
+                  left: 0 !important;
+                  top: 0 !important;
+                  width: 100% !important;
+                  margin: 0 !important;
+                  padding: 20px !important;
+                  border: none !important;
+                  box-shadow: none !important;
+                  background: white !important;
+                  color: black !important;
+                }
+              }
+            `}} />
+
+            <div className="flex justify-between items-center border-b border-zinc-800 pb-3">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">🖨️</span>
+                <h3 className="text-md font-bold text-emerald-400">INVOICE PRINT PREVIEW</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowPrintSlipModal(false);
+                  setActiveInvoiceForPrint(null);
+                }}
+                className="text-zinc-500 hover:text-white"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Printable Area Wrapper */}
+            <div id="tax-invoice-slip" className="bg-white text-zinc-950 p-8 rounded-2xl font-mono text-[11px] shadow-inner space-y-6 border border-zinc-200">
+              
+              {/* Header block */}
+              <div className="text-center border-b border-zinc-300 pb-4 space-y-1">
+                <h2 className="text-base font-black tracking-tight uppercase text-zinc-900">
+                  {activeCompany?.companyName || activeCompany?.name || "SMARTERP BUSINESS"}
+                </h2>
+                <div className="inline-block border border-zinc-950 px-3 py-0.5 font-bold text-[9px] tracking-widest uppercase">
+                  TAX INVOICE
+                </div>
+                <div className="text-[9px] text-zinc-600 mt-2 flex justify-between px-2 pt-2 border-t border-dashed border-zinc-200">
+                  <span><strong>INV NO:</strong> {activeInvoiceForPrint.invoiceNumber}</span>
+                  <span><strong>DATE:</strong> {new Date(activeInvoiceForPrint.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                </div>
+              </div>
+
+              {/* Bill To */}
+              <div className="space-y-0.5 bg-zinc-50 p-3 border border-zinc-200 rounded-lg">
+                <div className="text-[8px] uppercase font-bold text-zinc-500 tracking-wider">Bill To:</div>
+                <div className="text-xs font-black text-zinc-900">{activeInvoiceForPrint.customerName}</div>
+              </div>
+
+              {/* Items Table */}
+              <div className="border border-zinc-200 rounded-lg overflow-hidden bg-white">
+                <table className="w-full text-left border-collapse text-[10px]">
+                  <thead>
+                    <tr className="border-b border-zinc-250 bg-zinc-100 text-zinc-700 font-bold uppercase tracking-wider">
+                      <th className="p-2.5 text-center w-12">S.No</th>
+                      <th className="p-2.5">Stock Item</th>
+                      <th className="p-2.5 text-right w-16">Qty</th>
+                      <th className="p-2.5 text-right w-24">Rate</th>
+                      <th className="p-2.5 text-right w-28">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-200 text-zinc-800">
+                    {activeInvoiceForPrint.items?.map((item: any, idx: number) => {
+                      const nameOfItem = item.itemId?.itemName || "Stock Item";
+                      const itemSku = item.itemId?.sku ? ` (${item.itemId.sku})` : "";
+                      return (
+                        <tr key={item._id || idx} className="hover:bg-zinc-50/50">
+                          <td className="p-2.5 text-center text-zinc-500">{idx + 1}</td>
+                          <td className="p-2.5 font-bold text-zinc-900">
+                            {nameOfItem}{itemSku}
+                          </td>
+                          <td className="p-2.5 text-right">{item.qty}</td>
+                          <td className="p-2.5 text-right">₹{Number(item.rate).toFixed(2)}</td>
+                          <td className="p-2.5 text-right font-bold">₹{Number(item.amount).toFixed(2)}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Totals Summary */}
+              <div className="flex justify-end pt-2">
+                <div className="w-64 space-y-1 border-t border-zinc-300 pt-3 text-[10px] text-zinc-700">
+                  <div className="flex justify-between">
+                    <span>Gross Amount:</span>
+                    <span className="font-bold text-zinc-900">₹{Number(activeInvoiceForPrint.grossTotal || 0).toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>CGST (9%):</span>
+                    <span>₹{Number(activeInvoiceForPrint.cgst || 0).toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>SGST (9%):</span>
+                    <span>₹{Number(activeInvoiceForPrint.sgst || 0).toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between border-t border-zinc-900 pt-2 text-[11px] font-black text-zinc-900">
+                    <span>Net Payable:</span>
+                    <span className="text-emerald-700 font-bold">₹{Number(activeInvoiceForPrint.netPayable || 0).toFixed(2)}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Action tray */}
+            <div className="flex justify-end gap-3 pt-4 border-t border-zinc-800">
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="px-5 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-zinc-950 font-bold rounded-xl text-xs transition-colors flex items-center gap-1.5 shadow shadow-emerald-500/10"
+              >
+                🖨️ Direct Print / Save PDF
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowPrintSlipModal(false);
+                  setActiveInvoiceForPrint(null);
+                }}
+                className="px-4 py-2 rounded bg-zinc-850 hover:bg-zinc-800 text-xs font-bold transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
